@@ -126,7 +126,9 @@ def data_age_hours(reading: DeviceReading, now: datetime) -> float | None:
     """Return the hours since a reading was taken (its `date`), or None.
 
     GeoDrops' guidance: a latest reading more than 6 hours old means the probe
-    isn't reporting. The sync delay plays no part; it explains a slow upload,
+    isn't reporting. A healthy probe reads every 30 minutes and uploads at
+    least every 3 hours, and GeoDrops appends uploads hourly, so its latest
+    reading stays under about 5 hours old. The sync delay plays no part; it explains a slow upload,
     not whether one happened, and GeoDrops sometimes serves bogus values.
     """
     if reading.read_at is None:
