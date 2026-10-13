@@ -302,16 +302,25 @@ probes, usage stays well within BigQuery's free tier.
 
 ## Known limitations
 
-- **Readings are only as fresh as GeoDrops' upload.** A probe uploads its
-  readings in batches, typically every 2–3 hours, GeoDrops processes them
-  hourly, and the integration polls every 20 minutes by default, so a value
-  can be a few hours old. Last Reading shows when it was taken.
+- **Readings are only as fresh as GeoDrops' upload.** A probe takes a
+  reading every 30 minutes but saves battery by uploading only when soil
+  moisture has changed noticeably, or at the latest 3 hours after its last
+  upload. GeoDrops adds new uploads to its table once an hour, and the
+  integration polls every 20 minutes by default. So on steady soil a value
+  can be up to about 5 hours old while the probe is healthy; Last Reading
+  shows when it was taken. A latest reading older than 6 hours means the
+  probe isn't reporting.
 - **Cloud only.** Readings come from GeoDrops' BigQuery table through Google
   Cloud; there is no local API. If Google, GeoDrops or your internet
   connection is down, sensors keep their last value until "Expire after"
   and then go unavailable.
-- **GeoDrops' table is briefly empty about twice a day.** A poll during that
-  window finds nothing; each probe keeps its last reading.
+- **GeoDrops reprocesses its data twice a day.** It refits each probe's
+  soil profile and rewrites the whole history, which empties its table for
+  about 20 minutes. A poll during that window finds nothing; each probe keeps
+  its last reading. The rewrite can also adjust past values, so Home
+  Assistant's history (recorded as values arrived) can differ slightly from
+  what the GeoDrops app shows for the same time, and a sensor can change
+  value without a new reading.
 - **Probes are added by serial, not discovered.** The table is shared by all
   GeoDrops users, so the integration can't list "your" probes.
 - **The first probe is found by searching the last 7 days.** Probes added
