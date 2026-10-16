@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.8.0 — Calibration repairs
+Everything since 0.7.0. If you ran the 0.8.0 beta, nothing has changed since beta.1.
+
+**New**
+- **Probes that need their max-moisture calibration show in Repairs**, for a new probe's first test and for the retest GeoDrops asks for every 75 days. Each clears on its own once GeoDrops has the calibration.
+
+**Changed**
+- **A probe goes unavailable based only on when its latest reading was taken**, as GeoDrops recommends, so a bad upload-delay value from GeoDrops can no longer push it there early.
+- **Wick Status is now Max Moisture Recalibration**, because GeoDrops' code means the calibration has expired, not that a wick needs replacing.
+- **Probe Health's `wick_renewal_needed` state is now `recalibration_due`** (shown as Recalibration Due).
+- **Sync Delay is now called Cloud Upload Delay**, since it shows the upload delay GeoDrops reports, not how old the data is.
+
+Entity ids are unchanged; update any automation that compares Probe Health against `wick_renewal_needed`.
+
 ## 0.8.0-beta.1 — Calibration repairs
 **New**
 - **Probes that need their max-moisture calibration show in Repairs**, for a new probe's first test and for the retest GeoDrops asks for every 75 days. Each clears on its own once GeoDrops has the calibration.
