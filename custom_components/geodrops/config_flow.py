@@ -371,9 +371,12 @@ class GeoDropsOptionsFlow(OptionsFlowWithReload):
             serial = user_input["device"]
             remaining = [d for d in devices if d[const.DEV_SERIAL] != serial]
             registry = dr.async_get(self.hass)
-            device = registry.async_get_device(identifiers={(const.DOMAIN, serial)})
-            if device is not None:
-                registry.async_remove_device(device.id)
+            # async_get_device is deprecated; scope the lookup to this entry instead.
+            for device in dr.async_entries_for_config_entry(
+                registry, self.config_entry.entry_id
+            ):
+                if (const.DOMAIN, serial) in device.identifiers:
+                    registry.async_remove_device(device.id)
             options = {**self.config_entry.options, const.CONF_DEVICES: remaining}
             return self._save(options)
         choices = {

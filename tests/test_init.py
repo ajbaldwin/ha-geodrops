@@ -491,7 +491,11 @@ async def test_deleting_a_probe_from_its_device_page(hass):
     with _patch_client(), _patch_fetch():
         await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
-    device = dr.async_get(hass).async_get_device(identifiers={(const.DOMAIN, "AAA111")})
+    (device,) = [
+        d
+        for d in dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
+        if (const.DOMAIN, "AAA111") in d.identifiers
+    ]
 
     assert await async_remove_config_entry_device(hass, entry, device)
     assert [d["serial"] for d in entry.options[const.CONF_DEVICES]] == ["BBB222"]
