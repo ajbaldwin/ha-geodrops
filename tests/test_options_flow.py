@@ -8,9 +8,20 @@ import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.geodrops import const
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.data_entry_flow import FlowResultType, InvalidData
 from homeassistant.helpers import device_registry as dr
 from tests.common import FakeGeoDropsClient, patch_client, patch_client_init
+
+
+@pytest.fixture(autouse=True)
+async def _unload_reloaded_entries(hass):
+    """Saving options reloads the entry; unload it so no coordinator timer lingers."""
+    yield
+    await hass.async_block_till_done()
+    for entry in hass.config_entries.async_entries(const.DOMAIN):
+        if entry.state is ConfigEntryState.LOADED:
+            await hass.config_entries.async_unload(entry.entry_id)
 
 
 def _reading(device_id=1002):
@@ -82,7 +93,7 @@ async def test_add_second_device(hass):
     assert serials == ["AAA111", "AAA222"]
 
 
-async def test_remove_device(hass):
+async def test_remove_device(hass, caplog):
     entry = _entry()
     entry.add_to_hass(hass)
     registry = dr.async_get(hass)
@@ -99,8 +110,9 @@ async def test_remove_device(hass):
     )
     assert entry.options[const.CONF_DEVICES] == []
     # the device (and its 15 entities) must be purged from the registry, not orphaned
-    assert registry.async_get_device(identifiers={(const.DOMAIN, "AAA111")}) is None
     assert registry.async_get(device.id) is None
+    # the device lookup must not use HA's deprecated async_get_device
+    assert "deprecated" not in caplog.text
 
 
 _GOOD_SETTINGS = {

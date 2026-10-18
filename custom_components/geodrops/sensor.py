@@ -248,7 +248,7 @@ class Watering(ExtraStoredData):
         try:
             detected_at = dt_util.parse_datetime(data["detected_at"])
             confidence = float(data["confidence"])
-        except (KeyError, TypeError, ValueError):
+        except KeyError, TypeError, ValueError:
             return None
         if detected_at is None:
             return None

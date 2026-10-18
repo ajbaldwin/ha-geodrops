@@ -1,4 +1,4 @@
-FROM python:3.13
+FROM python:3.14
 WORKDIR /app
 COPY requirements-dev.txt custom_components/geodrops/manifest.json ./
 # aiogeodrops comes from the manifest, so tests run against the version users get.
