@@ -192,6 +192,16 @@ def test_last_reading_sensor_reports_the_reading_timestamp():
     assert sensor.unique_id == "AAA111_last_reading"
 
 
+def test_last_reading_is_never_in_the_future():
+    # GeoDrops labels a reading with the end of its half-hour slot, so a batch
+    # uploaded mid-slot carries a `date` up to 30 minutes ahead.
+    ahead = dt_util.utcnow() + timedelta(minutes=28)
+    sensor = _sensor(_coord(_with(read_at=ahead)), "last_reading")
+    before = dt_util.utcnow()
+    value = sensor.native_value
+    assert before <= value <= dt_util.utcnow()
+
+
 def test_last_reading_is_reported_even_while_training():
     when = dt_util.utcnow()
     sensor = _sensor(
