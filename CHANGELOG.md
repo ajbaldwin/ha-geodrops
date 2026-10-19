@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.9.0-beta.1 — Offline probe alerts
+**New**
+- **A probe that stops reporting shows in Repairs** once its latest reading is more than 24 hours old (set under Advanced Options → "Offline alert after"), and clears on its own when it reports again.
+- **When every probe stops at once, one "GeoDrops data is delayed" repair** appears instead, since the cause is usually on GeoDrops' side.
+
+**Fixed**
+- **Last Reading and Last Detected Watering no longer show a time in the future** for readings uploaded partway through GeoDrops' half-hour slot.
+- **A probe no longer briefly shows an older reading** while GeoDrops refreshes its data.
+- **Removing a probe keeps working on future Home Assistant versions**, which drop an API it used.
+
+No entity changes; the new alert uses its 24-hour default until you change it.
+
 ## 0.8.0 — Calibration repairs
 Everything since 0.7.0. If you ran the 0.8.0 beta, nothing has changed since beta.1.
 

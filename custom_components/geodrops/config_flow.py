@@ -47,6 +47,7 @@ _SETTINGS: list[tuple[str, int, int, int]] = [
     (const.CONF_WARN_HOURS, const.DEFAULT_WARN_HOURS, 1, 168),
     (const.CONF_SKIP_HOURS, const.DEFAULT_SKIP_HOURS, 1, 168),
     (const.CONF_EXPIRE_MINUTES, const.DEFAULT_EXPIRE_MINUTES, 5, 10080),
+    (const.CONF_ALERT_HOURS, const.DEFAULT_ALERT_HOURS, 1, 168),
 ]
 
 

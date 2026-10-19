@@ -1,6 +1,5 @@
 """The Last Detected Watering and Watering Confidence sensors."""
 
-from dataclasses import replace
 from datetime import timedelta
 
 from aiogeodrops import DeviceReading
@@ -130,9 +129,10 @@ async def test_stays_available_while_the_probe_is_offline(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
     at = dt_util.utcnow() - timedelta(hours=3)
-    await _setup(hass, _reading(0.66, at))
-    stale = replace(_reading(), read_at=dt_util.utcnow() - timedelta(days=2))
-    await _poll(hass, freezer, stale)
+    reading = _reading(0.66, at)
+    await _setup(hass, reading)
+    freezer.tick(timedelta(days=2))  # the probe goes quiet
+    await _poll(hass, freezer, reading)
     assert hass.states.get("sensor.front_dominant_moisture").state == "unavailable"
     assert hass.states.get(LAST).state == at.isoformat(timespec="seconds")
 

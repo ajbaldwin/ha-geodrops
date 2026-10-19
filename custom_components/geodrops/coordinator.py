@@ -46,6 +46,37 @@ PROBE_ISSUES = (
 type GeoDropsConfigEntry = ConfigEntry[GeoDropsCoordinator]
 
 
+def _newer(
+    polled: DeviceReading | None, held: DeviceReading | None
+) -> DeviceReading | None:
+    """Return the newer reading; a table reload can serve an older row."""
+    if polled is None or held is None:
+        return polled or held
+    if (
+        polled.read_at is not None
+        and held.read_at is not None
+        and polled.read_at < held.read_at
+    ):
+        return held
+    return polled
+
+
+# Raised when a probe's latest reading is older than "Offline alert after",
+# or, when every probe is, once for the whole entry.
+PROBE_OFFLINE = "probe_offline"
+DATA_DELAYED = "data_delayed"
+
+
+def data_delayed_issue_id(entry_id: str) -> str:
+    """Return the id of the entry's "GeoDrops data delayed" repair issue."""
+    return f"{DATA_DELAYED}_{entry_id}"
+
+
+def offline_issue_id(entry_id: str, serial: str) -> str:
+    """Return the id of a probe's offline repair issue."""
+    return f"{PROBE_OFFLINE}_{entry_id}_{serial}"
+
+
 def access_denied_issue_id(entry_id: str) -> str:
     """Return the id of the entry's "access denied" repair issue."""
     return f"access_denied_{entry_id}"
@@ -59,7 +90,8 @@ def probe_issue_prefixes(entry_id: str) -> tuple[str, ...]:
 def delete_entry_issues(hass: HomeAssistant, entry_id: str) -> None:
     """Remove every repair issue the entry raised."""
     ir.async_delete_issue(hass, const.DOMAIN, access_denied_issue_id(entry_id))
-    prefixes = probe_issue_prefixes(entry_id)
+    ir.async_delete_issue(hass, const.DOMAIN, data_delayed_issue_id(entry_id))
+    prefixes = (*probe_issue_prefixes(entry_id), offline_issue_id(entry_id, ""))
     for domain, issue_id in list(ir.async_get(hass).issues):
         if domain == const.DOMAIN and issue_id.startswith(prefixes):
             ir.async_delete_issue(hass, const.DOMAIN, issue_id)
@@ -158,12 +190,13 @@ class GeoDropsCoordinator(DataUpdateCoordinator[dict[int, DeviceReading]]):
         previous = self.data or {}
         merged: dict[int, DeviceReading] = {}
         for device_id in ids:
-            reading = data.get(device_id, previous.get(device_id))
+            reading = _newer(data.get(device_id), previous.get(device_id))
             if reading is not None:
                 merged[device_id] = reading
         self._seen = {d: t for d, t in self._seen.items() if d in ids}
         self._log_staleness(merged, now)
         self._sync_probe_issues(merged)
+        self._sync_offline_issues(merged, now)
         return merged
 
     def _raise_access_denied(self, err: GeoDropsAccessDeniedError) -> None:
@@ -228,6 +261,77 @@ class GeoDropsCoordinator(DataUpdateCoordinator[dict[int, DeviceReading]]):
             if (
                 domain == const.DOMAIN
                 and issue_id.startswith(prefixes)
+                and issue_id not in wanted
+            ):
+                ir.async_delete_issue(self.hass, const.DOMAIN, issue_id)
+
+    def _sync_offline_issues(
+        self, readings: dict[int, DeviceReading], now: datetime
+    ) -> None:
+        """Raise a repair for each probe silent past "Offline alert after".
+
+        When two or more probes are silent and none is reporting, the cause is
+        GeoDrops' data rather than the probes, so one entry-wide issue replaces
+        the per-probe ones. A probe with no reading (after a restart, silent for
+        longer than the lookback) keeps its issues as they are: they persist.
+        """
+        options = self.config_entry.options
+        hours: int = options.get(const.CONF_ALERT_HOURS, const.DEFAULT_ALERT_HOURS)
+        entry_id = self.config_entry.entry_id
+        offline: list[DeviceConfig] = []
+        fresh: list[DeviceConfig] = []
+        for device in self.devices:
+            reading = readings.get(device[const.DEV_ID])
+            age = None if reading is None else data_age_hours(reading, now)
+            if age is not None:
+                (offline if age > hours else fresh).append(device)
+        delayed_id = data_delayed_issue_id(entry_id)
+        registry = ir.async_get(self.hass)
+        if len(self.devices) >= 2 and len(offline) >= 2 and not fresh:
+            ir.async_create_issue(
+                self.hass,
+                const.DOMAIN,
+                delayed_id,
+                is_fixable=False,
+                is_persistent=True,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key=DATA_DELAYED,
+                translation_placeholders={"hours": str(hours)},
+                learn_more_url=TROUBLESHOOTING_URL,
+            )
+            wanted: set[str] = set()
+        else:
+            if fresh:
+                ir.async_delete_issue(self.hass, const.DOMAIN, delayed_id)
+            delayed = registry.async_get_issue(const.DOMAIN, delayed_id) is not None
+            wanted = {
+                offline_issue_id(entry_id, d[const.DEV_SERIAL])
+                for d in self.devices
+                if d not in fresh
+            }
+            for device in [] if delayed else offline:
+                ir.async_create_issue(
+                    self.hass,
+                    const.DOMAIN,
+                    offline_issue_id(entry_id, device[const.DEV_SERIAL]),
+                    is_fixable=False,
+                    is_persistent=True,
+                    severity=ir.IssueSeverity.WARNING,
+                    translation_key=PROBE_OFFLINE,
+                    translation_placeholders={
+                        "name": device[const.DEV_NAME],
+                        "serial": device[const.DEV_SERIAL],
+                        "hours": str(hours),
+                    },
+                    learn_more_url=TROUBLESHOOTING_URL,
+                )
+        # Reporting probes, removed probes and, under the entry-wide issue,
+        # every probe drop their offline issues.
+        prefix = offline_issue_id(entry_id, "")
+        for domain, issue_id in list(registry.issues):
+            if (
+                domain == const.DOMAIN
+                and issue_id.startswith(prefix)
                 and issue_id not in wanted
             ):
                 ir.async_delete_issue(self.hass, const.DOMAIN, issue_id)

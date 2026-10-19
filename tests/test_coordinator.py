@@ -5,8 +5,12 @@ from aiogeodrops import DeviceReading, GeoDropsAuthError, GeoDropsQueryError
 import pytest
 
 from custom_components.geodrops import const
-from custom_components.geodrops.coordinator import GeoDropsCoordinator
+from custom_components.geodrops.coordinator import (
+    GeoDropsCoordinator,
+    delete_entry_issues,
+)
 from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.update_coordinator import UpdateFailed
 from homeassistant.util import dt as dt_util
 
@@ -206,14 +210,165 @@ async def test_warn_after_setting_is_honoured(hass, monkeypatch, caplog):
     assert len(_stale_warnings(caplog)) == 1
 
 
-async def test_recovered_probe_is_logged_and_can_warn_again(hass, monkeypatch, caplog):
+async def test_recovered_probe_is_logged_and_can_warn_again(
+    hass, monkeypatch, caplog, freezer
+):
     coord = GeoDropsCoordinator(hass, _two_device_entry(), MagicMock())
     await _poll(coord, monkeypatch, {1001: _aged_reading(1001, 13)})
     caplog.clear()
-    await _poll(coord, monkeypatch, {1001: _aged_reading(1001, 0.5)})
+    fresh = _aged_reading(1001, 0.5)
+    await _poll(coord, monkeypatch, {1001: fresh})
     assert any(
         "reporting again" in r.getMessage() and r.levelname == "INFO"
         for r in caplog.records
     )
-    await _poll(coord, monkeypatch, {1001: _aged_reading(1001, 14)})
+    freezer.tick(timedelta(hours=14))
+    await _poll(coord, monkeypatch, {1001: fresh})
     assert len(_stale_warnings(caplog)) == 1
+
+
+# --- Offline-probe repairs ---------------------------------------------------
+
+
+def _offline_entry(*serials, **options):
+    entry = MagicMock()
+    entry.entry_id = "e1"
+    entry.options = {
+        const.CONF_DEVICES: [
+            {"serial": s, "device_id": 1001 + i, "name": f"Probe {i}"}
+            for i, s in enumerate(serials)
+        ],
+        **options,
+    }
+    return entry
+
+
+def _offline_issues(hass):
+    return sorted(
+        issue_id
+        for domain, issue_id in ir.async_get(hass).issues
+        if domain == const.DOMAIN
+        and issue_id.startswith(("probe_offline_", "data_delayed_"))
+    )
+
+
+async def test_older_reading_does_not_replace_the_held_one(hass, monkeypatch):
+    # During a table reload a poll can return an older row; keep the newer one.
+    coord = GeoDropsCoordinator(hass, _offline_entry("AAA111"), MagicMock())
+    await _poll(coord, monkeypatch, {1001: _aged_reading(1001, 1)})
+    held = coord.reading(1001)
+    await _poll(coord, monkeypatch, {1001: _aged_reading(1001, 30)})
+    assert coord.reading(1001) == held
+
+
+async def test_probe_offline_past_24_hours_raises_a_repair(hass, monkeypatch, freezer):
+    coord = GeoDropsCoordinator(hass, _offline_entry("AAA111", "BBB222"), MagicMock())
+    silent = _aged_reading(1001, 23)
+    await _poll(coord, monkeypatch, {1001: silent, 1002: _aged_reading(1002, 1)})
+    assert _offline_issues(hass) == []
+    freezer.tick(timedelta(hours=2))
+    await _poll(coord, monkeypatch, {1001: silent, 1002: _aged_reading(1002, 1)})
+    assert _offline_issues(hass) == ["probe_offline_e1_AAA111"]
+    issue = ir.async_get(hass).async_get_issue(const.DOMAIN, "probe_offline_e1_AAA111")
+    assert issue.translation_key == "probe_offline"
+    assert issue.translation_placeholders == {
+        "name": "Probe 0",
+        "serial": "AAA111",
+        "hours": "24",
+    }
+    assert issue.severity is ir.IssueSeverity.WARNING
+    assert issue.is_persistent
+    assert not issue.is_fixable
+
+
+async def test_offline_repair_clears_when_the_probe_reports(hass, monkeypatch):
+    coord = GeoDropsCoordinator(hass, _offline_entry("AAA111"), MagicMock())
+    await _poll(coord, monkeypatch, {1001: _aged_reading(1001, 30)})
+    assert _offline_issues(hass) == ["probe_offline_e1_AAA111"]
+    await _poll(coord, monkeypatch, {1001: _aged_reading(1001, 1)})
+    assert _offline_issues(hass) == []
+
+
+async def test_offline_alert_setting_is_honoured(hass, monkeypatch):
+    entry = _offline_entry("AAA111", **{const.CONF_ALERT_HOURS: 6})
+    coord = GeoDropsCoordinator(hass, entry, MagicMock())
+    await _poll(coord, monkeypatch, {1001: _aged_reading(1001, 7)})
+    assert _offline_issues(hass) == ["probe_offline_e1_AAA111"]
+    issue = ir.async_get(hass).async_get_issue(const.DOMAIN, "probe_offline_e1_AAA111")
+    assert issue.translation_placeholders["hours"] == "6"
+
+
+async def test_all_probes_offline_raise_one_data_delayed_repair(
+    hass, monkeypatch, freezer
+):
+    # Every probe silent at once points at GeoDrops' data, not the probes.
+    coord = GeoDropsCoordinator(hass, _offline_entry("AAA111", "BBB222"), MagicMock())
+    first, second = _aged_reading(1001, 30), _aged_reading(1002, 1)
+    await _poll(coord, monkeypatch, {1001: first, 1002: second})
+    assert _offline_issues(hass) == ["probe_offline_e1_AAA111"]
+    freezer.tick(timedelta(hours=25))
+    await _poll(coord, monkeypatch, {})
+    assert _offline_issues(hass) == ["data_delayed_e1"]
+    issue = ir.async_get(hass).async_get_issue(const.DOMAIN, "data_delayed_e1")
+    assert issue.translation_key == "data_delayed"
+    assert issue.translation_placeholders == {"hours": "24"}
+    assert issue.is_persistent
+    await _poll(
+        coord,
+        monkeypatch,
+        {1001: _aged_reading(1001, 30), 1002: _aged_reading(1002, 1)},
+    )
+    assert _offline_issues(hass) == ["probe_offline_e1_AAA111"]
+
+
+async def test_probe_with_no_reading_keeps_its_offline_repair(hass, monkeypatch):
+    # After a restart a probe silent for longer than the lookback returns no
+    # row; its persistent repair must not be cleared for lack of data.
+    coord = GeoDropsCoordinator(hass, _offline_entry("AAA111"), MagicMock())
+    await _poll(coord, monkeypatch, {1001: _aged_reading(1001, 30)})
+    restarted = GeoDropsCoordinator(hass, _offline_entry("AAA111"), MagicMock())
+    await _poll(restarted, monkeypatch, {})
+    assert _offline_issues(hass) == ["probe_offline_e1_AAA111"]
+
+
+async def test_data_delayed_repair_survives_a_restart_without_rows(hass, monkeypatch):
+    coord = GeoDropsCoordinator(hass, _offline_entry("AAA111", "BBB222"), MagicMock())
+    rows = {1001: _aged_reading(1001, 30), 1002: _aged_reading(1002, 30)}
+    await _poll(coord, monkeypatch, rows)
+    restarted = GeoDropsCoordinator(
+        hass, _offline_entry("AAA111", "BBB222"), MagicMock()
+    )
+    await _poll(restarted, monkeypatch, {1001: _aged_reading(1001, 31)})
+    assert _offline_issues(hass) == ["data_delayed_e1"]
+
+
+async def test_removed_probe_takes_its_offline_repair_with_it(hass, monkeypatch):
+    entry = _offline_entry("AAA111", "BBB222")
+    coord = GeoDropsCoordinator(hass, entry, MagicMock())
+    await _poll(
+        coord,
+        monkeypatch,
+        {1001: _aged_reading(1001, 30), 1002: _aged_reading(1002, 1)},
+    )
+    entry.options = {const.CONF_DEVICES: entry.options[const.CONF_DEVICES][1:]}
+    await _poll(coord, monkeypatch, {1002: _aged_reading(1002, 1)})
+    assert _offline_issues(hass) == []
+
+
+async def test_removing_the_entry_removes_its_offline_repairs(hass, monkeypatch):
+    coord = GeoDropsCoordinator(hass, _offline_entry("AAA111", "BBB222"), MagicMock())
+    await _poll(
+        coord,
+        monkeypatch,
+        {1001: _aged_reading(1001, 30), 1002: _aged_reading(1002, 30)},
+    )
+    ir.async_create_issue(
+        hass,
+        const.DOMAIN,
+        "probe_offline_e1_AAA111",
+        is_fixable=False,
+        severity=ir.IssueSeverity.WARNING,
+        translation_key="probe_offline",
+    )
+    delete_entry_issues(hass, "e1")
+    assert _offline_issues(hass) == []

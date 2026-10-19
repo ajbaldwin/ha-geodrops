@@ -11,6 +11,7 @@ CONF_CREDENTIALS_JSON: Final = "credentials_json"
 CONF_PROJECT_ID: Final = "project_id"
 
 # Keys in entry.options.
+CONF_ALERT_HOURS: Final = "offline_alert_hours"
 CONF_DEVICES: Final = "devices"  # A list of DeviceConfig.
 CONF_EXPIRE_MINUTES: Final = "expire_after_minutes"
 CONF_LOOKBACK_HOURS: Final = "lookback_hours"
@@ -25,6 +26,9 @@ DEV_NAME: Final = "name"
 DEV_SERIAL: Final = "serial"
 
 # Defaults, carried over from the standalone service.
+# 24 h: over 60 days of history, 12 h would also have flagged a gap that
+# recovered on its own.
+DEFAULT_ALERT_HOURS: Final = 24
 DEFAULT_EXPIRE_MINUTES: Final = 80
 DEFAULT_LOOKBACK_HOURS: Final = 12
 DEFAULT_SCAN_INTERVAL: Final = 20

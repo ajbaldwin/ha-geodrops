@@ -100,14 +100,16 @@
           "lookback_hours": "BigQuery lookback (hours)",
           "staleness_warn_hours": "Warn after (hours)",
           "staleness_skip_hours": "Mark unavailable after (hours)",
-          "expire_after_minutes": "Expire after (minutes)"
+          "expire_after_minutes": "Expire after (minutes)",
+          "offline_alert_hours": "Offline alert after (hours)"
         },
         "data_description": {
           "scan_interval_minutes": "How often to query BigQuery for new readings. Default 20, minimum 5.",
           "lookback_hours": "How far back to search for each probe's latest reading on every poll. Default 12, 1 to 168.",
           "staleness_warn_hours": "Log a warning once a probe's data is older than this many hours. Default 12, at most \"Mark unavailable after\".",
           "staleness_skip_hours": "Mark a probe's sensors unavailable once its latest reading is older than this many hours. Default 12, 1 to 168.",
-          "expire_after_minutes": "Also mark sensors unavailable if a probe's data has not come back from a poll within this many minutes. Must be longer than the poll interval. Default 80."
+          "expire_after_minutes": "Also mark sensors unavailable if a probe's data has not come back from a poll within this many minutes. Must be longer than the poll interval. Default 80.",
+          "offline_alert_hours": "Show a repair once a probe's latest reading is older than this many hours, or one repair for the whole integration when every probe is. Default 24, 1 to 168."
         }
       }
     },
@@ -151,6 +153,14 @@
     "max_moisture_recalibration": {
       "title": "{name}'s max-moisture calibration has expired",
       "description": "GeoDrops asks for the max-moisture (deep water) test to be run again on probe {name} ({serial}). It does this 75 days after the last one. Moisture keeps reporting meanwhile, but its quality drops. Open the GeoDrops app, select the probe and run the deep water test again. This message goes away once GeoDrops has the new calibration, which can take a few hours to show up."
+    },
+    "probe_offline": {
+      "title": "{name} has stopped reporting",
+      "description": "Probe {name} ({serial}) hasn't sent GeoDrops a reading for more than {hours} hours. Check in the GeoDrops app that it is online; a weak Wi-Fi signal or a flat battery are the usual causes. This message goes away on its own once the probe reports again."
+    },
+    "data_delayed": {
+      "title": "GeoDrops data is delayed",
+      "description": "None of your probes has a reading newer than {hours} hours. When every probe stops at once, the delay is usually on GeoDrops' side rather than at the probes. If it lasts, check the GeoDrops app and contact GeoDrops. This message goes away on its own once readings arrive again."
     }
   },
   "entity": {
