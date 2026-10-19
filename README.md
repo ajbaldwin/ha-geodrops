@@ -193,7 +193,7 @@ Each probe becomes one Home Assistant device with 27 sensors:
 | Temperature Depth 3 | Soil temperature (°C) at depth sensor 3 |
 | Avg. 7-Day Sun | 7-day trailing average sun exposure (hours) |
 | Last Reading | When the probe took its latest reading (timestamp). GeoDrops stamps each reading with the end of its half-hour slot, so this can be up to 30 minutes late; it never shows a time in the future. |
-| Last Detected Watering | When GeoDrops last detected a watering in the probe's readings (timestamp) |
+| Last Detected Watering | When GeoDrops last detected a watering in the probe's readings (timestamp). Like Last Reading, it never shows a time in the future. |
 | Watering Confidence | GeoDrops' irrigation confidence for that watering (%) |
 
 GeoDrops marks only the odd reading as showing a watering, so Last Detected

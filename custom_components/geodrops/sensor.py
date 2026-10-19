@@ -272,7 +272,10 @@ WATERING_DESCRIPTIONS: tuple[GeoDropsWateringSensorEntityDescription, ...] = (
     GeoDropsWateringSensorEntityDescription(
         key="last_watering",
         translation_key="last_watering",
-        value_fn=lambda w: w.detected_at,
+        # GeoDrops dates a reading with the end of its half-hour slot, so a
+        # mid-slot upload is up to 30 minutes ahead; never show a future time.
+        # The held detected_at stays as dated, so later polls compare cleanly.
+        value_fn=lambda w: min(w.detected_at, dt_util.utcnow()),
         device_class=SensorDeviceClass.TIMESTAMP,
     ),
     GeoDropsWateringSensorEntityDescription(

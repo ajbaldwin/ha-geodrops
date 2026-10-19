@@ -92,6 +92,16 @@ async def test_shows_the_last_watering_as_a_timestamp_and_percentage(
     assert confidence.attributes["unit_of_measurement"] == "%"
 
 
+async def test_last_watering_is_never_in_the_future(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    # GeoDrops labels a reading with the end of its half-hour slot, so a
+    # watering uploaded mid-slot is dated up to 30 minutes ahead.
+    now = dt_util.utcnow()
+    await _setup(hass, _reading(0.5, now + timedelta(minutes=25)))
+    assert hass.states.get(LAST).state == now.isoformat(timespec="seconds")
+
+
 async def test_holds_the_watering_after_it_leaves_the_window(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
