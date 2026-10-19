@@ -221,7 +221,11 @@ SENSOR_DESCRIPTIONS: tuple[GeoDropsSensorEntityDescription, ...] = (
     GeoDropsSensorEntityDescription(
         key="last_reading",
         translation_key="last_reading",
-        value_fn=lambda r: r.read_at,
+        # GeoDrops labels a reading with the end of its half-hour slot, so a
+        # mid-slot upload is up to 30 minutes ahead; never show a future time.
+        value_fn=lambda r: (
+            r.read_at if r.read_at is None else min(r.read_at, dt_util.utcnow())
+        ),
         device_class=SensorDeviceClass.TIMESTAMP,
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
