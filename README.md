@@ -145,6 +145,7 @@ Saving them reloads the integration.
 | Warn after (hours) | 12 | 1–168, at most "Mark unavailable after" | Writes one warning to the Home Assistant log when a probe's data gets older than this, and a note when it reports again. |
 | Mark unavailable after (hours) | 12 | 1–168 | Makes a probe's sensors unavailable once its latest reading is older than this, counted from when the probe took the reading. |
 | Expire after (minutes) | 80 | 5–10080, longer than the poll interval | Also makes a probe's sensors unavailable if its data hasn't come back from a poll for this long, for example during a Google outage. |
+| Offline alert after (hours) | 24 | 1–168 | Shows a repair once a probe's latest reading is older than this. When two or more probes are that old and none is reporting, shows one "GeoDrops data is delayed" repair instead. |
 
 ### Rotating the key or changing project
 
@@ -353,6 +354,16 @@ which case its moisture sensors stay `unknown` until it is, or again, which
 it asks for 75 days after the last one. Run the test from the probe's prompt
 in the GeoDrops app. The repair clears itself once GeoDrops stops asking,
 which can take a few hours to show up.
+
+**A "has stopped reporting" repair** (Settings → System → Repairs). That
+probe's latest reading is older than "Offline alert after" (24 hours by
+default). Check in the GeoDrops app that it is online; Wi-Fi and the battery
+are the usual causes. The repair clears itself once the probe reports again,
+and stays across restarts until then.
+
+**A "GeoDrops data is delayed" repair.** Every probe stopped at once, which
+points at GeoDrops rather than your probes. It clears itself once readings
+arrive again.
 
 **GeoDrops asks to re-authenticate.** Google stopped accepting the key. See
 [Rotating the key or changing project](#rotating-the-key-or-changing-project).

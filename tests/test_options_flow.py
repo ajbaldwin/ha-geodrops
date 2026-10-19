@@ -75,6 +75,8 @@ async def test_settings_updates_interval(hass):
         },
     )
     assert entry.options[const.CONF_SCAN_INTERVAL] == 30
+    # a form without the offline alert (an older frontend) still saves its default
+    assert entry.options[const.CONF_ALERT_HOURS] == const.DEFAULT_ALERT_HOURS == 24
     assert len(entry.options[const.CONF_DEVICES]) == 1  # devices preserved
 
 
@@ -121,6 +123,7 @@ _GOOD_SETTINGS = {
     const.CONF_WARN_HOURS: 6,
     const.CONF_SKIP_HOURS: 12,
     const.CONF_EXPIRE_MINUTES: 80,
+    const.CONF_ALERT_HOURS: 24,
 }
 
 
@@ -146,6 +149,8 @@ async def _open(hass, step, options=None):
         (const.CONF_WARN_HOURS, 0),
         (const.CONF_SKIP_HOURS, 0),
         (const.CONF_EXPIRE_MINUTES, 0),
+        (const.CONF_ALERT_HOURS, 0),
+        (const.CONF_ALERT_HOURS, 169),
     ],
 )
 async def test_settings_reject_out_of_range_values(hass, key, value):
