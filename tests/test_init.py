@@ -1,4 +1,5 @@
 from dataclasses import replace
+import json
 
 from aiogeodrops import (
     DeviceReading,
@@ -465,6 +466,45 @@ async def test_errors_are_translated(hass):
         err = coordinator.last_exception
         assert (err.translation_domain, err.translation_key) == (const.DOMAIN, key)
         assert err.translation_placeholders == {"error": str(exc)}
+
+
+async def test_errors_hide_the_gcp_account_from_the_log(hass, caplog):
+    # Home Assistant logs these errors, and logs get pasted into public issues.
+    entry = _entry(hass)
+    key = json.dumps(
+        {
+            "type": "x",
+            "client_email": "ha@key-project.iam.gserviceaccount.com",
+            "project_id": "key-project",
+        }
+    )
+    hass.config_entries.async_update_entry(
+        entry,
+        data={const.CONF_PROJECT_ID: "my-project", const.CONF_CREDENTIALS_JSON: key},
+    )
+    with _patch_client(), _patch_fetch():
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    coordinator = entry.runtime_data
+    error = (
+        "403 Access Denied: ha@key-project.iam.gserviceaccount.com cannot "
+        "use key-project in my-project"
+    )
+    redacted = "403 Access Denied: **REDACTED** cannot use **REDACTED** in **REDACTED**"
+    for exc_type in (GeoDropsQueryError, GeoDropsAccessDeniedError, GeoDropsAuthError):
+        with _patch_fetch(side_effect=exc_type(error)):
+            await coordinator.async_refresh()
+            await hass.async_block_till_done()
+        placeholders = coordinator.last_exception.translation_placeholders
+        assert placeholders == {"error": redacted}
+    assert redacted in caplog.text
+    assert "key-project" not in caplog.text
+    assert "my-project" not in caplog.text
+    # The repair stays in the user's own UI and names the project anyway, so it
+    # keeps Google's full text.
+    (issue_key,) = _issues(hass)
+    issue = ir.async_get(hass).issues[issue_key]
+    assert issue.translation_placeholders["error"] == error
 
 
 async def test_unparseable_key_error_is_translated(hass):

@@ -22,6 +22,7 @@ from homeassistant.util import dt as dt_util
 
 from . import const
 from .const import DeviceConfig
+from .redact import redact_account
 from .transform import (
     MAX_MOISTURE_CODES,
     RECALIBRATION_CODES,
@@ -160,26 +161,29 @@ class GeoDropsCoordinator(DataUpdateCoordinator[dict[int, DeviceReading]]):
             self._clear_access_denied()
             self._sync_probe_issues({})
             return {}
+        # Home Assistant logs these errors, and logs get pasted into public
+        # issues, so Google's text loses the project and service account. The
+        # access-denied repair, shown only in the user's own UI, keeps it.
         try:
             data = await self.client.fetch_latest(ids, self.lookback_hours)
         except GeoDropsAuthError as err:
             raise ConfigEntryAuthFailed(
                 translation_domain=const.DOMAIN,
                 translation_key="auth_failed",
-                translation_placeholders={"error": str(err)},
+                translation_placeholders={"error": self._redact(err)},
             ) from err
         except GeoDropsAccessDeniedError as err:
             self._raise_access_denied(err)
             raise UpdateFailed(
                 translation_domain=const.DOMAIN,
                 translation_key="access_denied",
-                translation_placeholders={"error": str(err)},
+                translation_placeholders={"error": self._redact(err)},
             ) from err
         except GeoDropsError as err:
             raise UpdateFailed(
                 translation_domain=const.DOMAIN,
                 translation_key="query_failed",
-                translation_placeholders={"error": str(err)},
+                translation_placeholders={"error": self._redact(err)},
             ) from err
         self._clear_access_denied()
         now = dt_util.utcnow()
@@ -198,6 +202,15 @@ class GeoDropsCoordinator(DataUpdateCoordinator[dict[int, DeviceReading]]):
         self._sync_probe_issues(merged)
         self._sync_offline_issues(merged, now)
         return merged
+
+    def _redact(self, err: GeoDropsError) -> str:
+        """Strip the user's GCP account from the error, and return its text.
+
+        The error itself is rewritten too: it is chained to the one raised, and
+        Home Assistant's debug log prints the whole chain.
+        """
+        err.args = (redact_account(str(err), self.config_entry.data),)
+        return str(err)
 
     def _raise_access_denied(self, err: GeoDropsAccessDeniedError) -> None:
         """Only a change in GCP fixes a 403, so tell the user in Repairs."""
