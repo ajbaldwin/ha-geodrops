@@ -70,7 +70,8 @@ CHANGELOG sections:
    ```
 
    The script refuses unless you are on a clean `main` that matches
-   `origin/main`, CI passed on that commit, the tag is new, and `CHANGELOG.md`
+   `origin/main`, the CI and Validate workflows (plus any other run) passed on
+   that commit, the tag is new, and `CHANGELOG.md`
    has the version's section. It then tags `vX.Y.Z` and creates the GitHub
    release — a pre-release for `-beta.N`, the latest release for a stable —
    titled from the CHANGELOG heading. `--dry-run` runs every check and shows

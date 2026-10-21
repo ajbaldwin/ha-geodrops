@@ -84,13 +84,19 @@ if [ "$PRERELEASE" = true ]; then
   fi
 fi
 
-# CI: the latest run of every workflow on HEAD must have passed.
+# CI: the latest run of every workflow on HEAD must have passed, and these
+# workflows must have run at all. Right after a merge they may not have started
+# yet, and HACS wants the release created after its checks (Validate) passed.
+REQUIRED_WORKFLOWS=("CI" "Validate")
 ci=$(gh run list --commit "$SHA" --json workflowName,status,conclusion \
   --jq 'unique_by(.workflowName)[] | "\(.workflowName)|\(.status)|\(.conclusion)"' 2>/dev/null || true)
 # unique_by keeps the first entry per workflow; gh lists newest first.
-if [ -z "$ci" ]; then
-  problem "no CI runs found for ${SHA:0:7}"
-else
+for required in "${REQUIRED_WORKFLOWS[@]}"; do
+  if ! grep -q "^$required|" <<< "$ci"; then
+    problem "CI '$required' has no run on ${SHA:0:7} yet; wait for it to start"
+  fi
+done
+if [ -n "$ci" ]; then
   while IFS='|' read -r name status conclusion; do
     # inside .github/workflows/publish.yml, that run is itself in progress
     if [ -n "${GITHUB_WORKFLOW:-}" ] && [ "$name" = "$GITHUB_WORKFLOW" ]; then
