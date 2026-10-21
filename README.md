@@ -48,7 +48,7 @@ self-contained steps below. If that link ever moves, search the
 [GeoDrops community](https://geodrops.discourse.group/) for "Home Assistant".
 
 1. **Create (or reuse) a GCP project** at the
-   [GCP Console](https://console.cloud.google.com/) — e.g. `home-assistant-geodrops`.
+   [GCP Console](https://console.cloud.google.com/) — e.g. `my-ha-bigquery`.
    Note its **project ID** (you enter it during setup).
 2. **Enable the BigQuery API** on that project: APIs & Services → Library →
    search "BigQuery API" → **Enable**.
