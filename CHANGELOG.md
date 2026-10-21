@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.0-beta.2 — Safer logs
+**Fixed**
+- **Errors in the Home Assistant log no longer show your GCP project or service-account email**, so a log is safe to paste into a GitHub issue.
+
+No entity changes.
+
 ## 0.9.0-beta.1 — Offline probe alerts
 **New**
 - **A probe that stops reporting shows in Repairs** once its latest reading is more than 24 hours old (set under Advanced Options → "Offline alert after"), and clears on its own when it reports again.
