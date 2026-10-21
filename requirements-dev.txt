@@ -1,6 +1,5 @@
-pytest
-pytest-asyncio
-pytest-cov
+# pytest, pytest-asyncio and pytest-cov come pinned from
+# pytest-homeassistant-custom-component, matching the HA release it tracks.
 pytest-homeassistant-custom-component==0.13.367
 mypy==2.4.0
 ruff==0.16.10
