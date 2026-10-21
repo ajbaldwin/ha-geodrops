@@ -61,6 +61,7 @@ async def test_coordinator_fetches_and_maps(hass, monkeypatch):
 
 async def test_coordinator_does_not_stamp_success_on_failure(hass, monkeypatch):
     entry = MagicMock()
+    entry.data = {const.CONF_PROJECT_ID: "p", const.CONF_CREDENTIALS_JSON: "{}"}
     entry.options = {
         const.CONF_DEVICES: [{"serial": "AAA111", "device_id": 1001, "name": "Front"}],
         const.CONF_SCAN_INTERVAL: 20,
@@ -79,6 +80,7 @@ async def test_coordinator_does_not_stamp_success_on_failure(hass, monkeypatch):
 
 async def test_coordinator_raises_auth_failed_when_key_rejected(hass, monkeypatch):
     entry = MagicMock()
+    entry.data = {const.CONF_PROJECT_ID: "p", const.CONF_CREDENTIALS_JSON: "{}"}
     entry.options = {
         const.CONF_DEVICES: [{"serial": "AAA111", "device_id": 1001, "name": "Front"}]
     }
