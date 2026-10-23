@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.0-beta.3 — Seasonal probe removal
+**New**
+- **Each probe has an Active switch** on its device page: turn it off while a probe is out of the ground, and it raises no repairs and its sensors show as unavailable, except Last Reading.
+- **Probes whose device you disable in Home Assistant are no longer polled** and their repairs clear straight away.
+
+One new switch per probe, on by default; nothing changes until you turn one off.
+
 ## 0.9.0-beta.2 — Safer logs
 **Fixed**
 - **Errors in the Home Assistant log no longer show your GCP project or service-account email**, so a log is safe to paste into a GitHub issue.
