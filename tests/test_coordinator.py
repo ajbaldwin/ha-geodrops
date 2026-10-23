@@ -19,6 +19,7 @@ def _client(fetch):
     """A client whose fetch_latest(ids, lookback) returns (or raises from) `fetch`."""
     client = MagicMock()
     client.fetch_latest = AsyncMock(side_effect=fetch)
+    client.fetch_battery_history = AsyncMock(return_value={})
     return client
 
 
@@ -178,6 +179,7 @@ def _stale_warnings(caplog):
 
 async def _poll(coord, monkeypatch, rows):
     coord.client.fetch_latest = AsyncMock(return_value=rows)
+    coord.client.fetch_battery_history = AsyncMock(return_value={})
     coord.data = await coord._async_update_data()
 
 

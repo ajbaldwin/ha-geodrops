@@ -11,45 +11,63 @@ from .test_sensor import _coord, _reading
 DEVICE = {"serial": "AAA111", "device_id": 1001, "name": "Front"}
 
 
-def _binary_sensor(reading, key):
-    sensors = build_binary_sensors(_coord(reading), DEVICE)
+def _binary_sensor(reading, key, outlook=None):
+    coord = _coord(reading)
+    coord.battery_outlook.return_value = outlook
+    sensors = build_binary_sensors(coord, DEVICE)
     return {s.entity_description.key: s for s in sensors}[key]
 
 
-def _battery_status(reading):
-    return _binary_sensor(reading, "battery_poor")
+def _battery_status(reading=None, outlook=None):
+    return _binary_sensor(reading or _reading(), "battery_poor", outlook)
 
 
 def test_four_binary_sensors_per_device():
     assert len(build_binary_sensors(_coord(_reading()), DEVICE)) == 4
 
 
-def test_every_binary_sensor_is_a_diagnostic_problem():
+def test_binary_sensors_are_diagnostic_problems_except_battery():
     for sensor in build_binary_sensors(_coord(_reading()), DEVICE):
-        assert sensor.device_class is BinarySensorDeviceClass.PROBLEM
+        expected = (
+            BinarySensorDeviceClass.BATTERY
+            if sensor.entity_description.key == "battery_poor"
+            else BinarySensorDeviceClass.PROBLEM
+        )
+        assert sensor.device_class is expected
         assert sensor.entity_category is EntityCategory.DIAGNOSTIC
 
 
-def test_only_max_moisture_calibration_is_enabled_by_default():
+def test_enabled_by_default():
     enabled = {
         s.entity_description.key
         for s in build_binary_sensors(_coord(_reading()), DEVICE)
         if s.entity_registry_enabled_default
     }
-    assert enabled == {"max_moisture_required"}
+    assert enabled == {"max_moisture_required", "battery_poor"}
 
 
-def test_battery_status_follows_geodrops_flag():
-    sensor = _battery_status(replace(_reading(), battery_poor=True))
-    assert sensor.is_on is True
-    assert sensor.unique_id == "AAA111_battery_poor"  # unchanged by the rename
+@pytest.mark.parametrize(
+    ("outlook", "on"),
+    [("ok", False), ("soon", True), ("now", True), (None, None)],
+)
+def test_battery_status_follows_the_battery_outlook(outlook, on):
+    sensor = _battery_status(outlook=outlook)
+    assert sensor.is_on is on
+    sensor.coordinator.battery_outlook.assert_called_with(1001)
+
+
+def test_battery_status_ignores_geodrops_flag():
+    sensor = _battery_status(replace(_reading(), battery_poor=True), outlook="ok")
+    assert sensor.is_on is False
+    assert sensor.unique_id == "AAA111_battery_poor"  # kept from the old meaning
     assert sensor.translation_key == "battery_status"
-    assert _battery_status(replace(_reading(), battery_poor=False)).is_on is False
 
 
-def test_battery_status_is_unknown_without_a_value():
-    assert _battery_status(replace(_reading(), battery_poor=None)).is_on is None
-    assert _battery_status(None).is_on is None
+def test_battery_status_is_unknown_without_a_reading():
+    sensor = build_binary_sensors(_coord(None), DEVICE)[0]
+    sensor.coordinator.battery_outlook.return_value = "now"
+    assert sensor.entity_description.key == "battery_poor"
+    assert sensor.is_on is None
 
 
 @pytest.mark.parametrize(

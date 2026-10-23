@@ -30,6 +30,9 @@ class FakeGeoDropsClient:
     async def fetch_latest(self, device_ids, lookback_hours):
         return {}
 
+    async def fetch_battery_history(self, device_ids, days):
+        return {}
+
 
 def patch_client(method, **kwargs):
     """Replace one client method with an AsyncMock(**kwargs), e.g. side_effect=error."""

@@ -1,7 +1,9 @@
 from dataclasses import replace
+from datetime import timedelta
 import json
 
 from aiogeodrops import (
+    BatteryPoint,
     DeviceReading,
     GeoDropsAccessDeniedError,
     GeoDropsAuthError,
@@ -24,6 +26,7 @@ from homeassistant.helpers import (
     entity_registry as er,
     issue_registry as ir,
 )
+from homeassistant.util import dt as dt_util
 from tests.common import FakeGeoDropsClient, patch_client, patch_client_init
 
 
@@ -45,7 +48,7 @@ def _reading(device_id=1001):
         qcn_d1=2,
         qcn_d2=2,
         qcn_d3=2,
-        battery_mv=3010.0,
+        battery_mv=5300.0,
         rssi_dbm=-97.0,
         battery_poor=False,
         qcn=2,
@@ -166,7 +169,8 @@ async def test_entity_ids_names_and_states(hass):
     assert hass.states.get("sensor.front_reading_quality").state == "good"
     battery = hass.states.get("binary_sensor.front_battery_status")
     assert battery.attributes["friendly_name"] == "Front Battery Status"
-    assert battery.state == "off"
+    # No battery history yet, and the latest voltage is above the floor.
+    assert battery.state == "unknown"
 
 
 async def test_options_change_reloads_entry_once(hass):
@@ -302,7 +306,6 @@ async def test_diagnostic_and_disabled_sensors(hass):
         "battery_voltage",
         "signal_strength",
         "next_action",
-        "battery_poor",
         "wick_renewal",
         "hardware_problem",
     }
@@ -315,6 +318,85 @@ async def test_diagnostic_and_disabled_sensors(hass):
     # other integrations read the quality states, so they must exist
     assert hass.states.get("sensor.front_reading_quality_depth_1").state == "good"
     assert hass.states.get("sensor.front_dominant_moisture").state == "42.0"
+
+
+async def test_battery_status_and_repair_from_the_battery_trend(hass):
+    entry = _entry(hass)
+    now = dt_util.utcnow()
+    collapsed = [5300 - 4 * d for d in range(11)] + [5000, 4700, 4500]
+    history = {
+        1001: [
+            BatteryPoint(now - timedelta(days=13 - d), mv)
+            for d, mv in enumerate(collapsed)
+        ]
+    }
+    with (
+        _patch_client(),
+        _patch_fetch(),
+        patch_client("fetch_battery_history", return_value=history),
+    ):
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    state = hass.states.get("binary_sensor.front_battery_status")
+    assert state.state == "on"
+    assert state.attributes["device_class"] == "battery"
+    assert ir.async_get(hass).async_get_issue(
+        const.DOMAIN, f"battery_replace_{entry.entry_id}_AAA111"
+    )
+
+
+async def test_upgrade_enables_battery_status_unless_the_user_disabled_it(hass):
+    entry = MockConfigEntry(
+        domain=const.DOMAIN,
+        unique_id="p",
+        version=1,
+        minor_version=1,
+        data={const.CONF_PROJECT_ID: "p", const.CONF_CREDENTIALS_JSON: '{"type":"x"}'},
+        options={
+            const.CONF_DEVICES: [
+                {"serial": "AAA111", "device_id": 1001, "name": "Front"},
+                {"serial": "BBB222", "device_id": 1002, "name": "Back"},
+            ]
+        },
+    )
+    entry.add_to_hass(hass)
+    registry = er.async_get(hass)
+
+    def _old_entity(unique_id, disabled_by):
+        return registry.async_get_or_create(
+            "binary_sensor",
+            const.DOMAIN,
+            unique_id,
+            config_entry=entry,
+            disabled_by=disabled_by,
+        ).entity_id
+
+    ours = _old_entity("AAA111_battery_poor", er.RegistryEntryDisabler.INTEGRATION)
+    users = _old_entity("BBB222_battery_poor", er.RegistryEntryDisabler.USER)
+    other = _old_entity("AAA111_wick_renewal", er.RegistryEntryDisabler.INTEGRATION)
+
+    with _patch_client(), _patch_fetch():
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    assert registry.async_get(ours).disabled_by is None
+    assert registry.async_get(users).disabled_by is er.RegistryEntryDisabler.USER
+    assert registry.async_get(other).disabled_by is er.RegistryEntryDisabler.INTEGRATION
+    assert (entry.version, entry.minor_version) == (1, 2)
+
+
+async def test_entry_from_a_newer_version_is_not_loaded(hass):
+    entry = MockConfigEntry(
+        domain=const.DOMAIN,
+        unique_id="p",
+        version=2,
+        data={const.CONF_PROJECT_ID: "p", const.CONF_CREDENTIALS_JSON: '{"type":"x"}'},
+        options={const.CONF_DEVICES: []},
+    )
+    entry.add_to_hass(hass)
+    with _patch_client(), _patch_fetch():
+        await hass.config_entries.async_setup(entry.entry_id)
+    assert entry.state is ConfigEntryState.MIGRATION_ERROR
 
 
 def _issues(hass):

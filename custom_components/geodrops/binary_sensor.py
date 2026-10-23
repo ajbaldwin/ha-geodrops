@@ -1,4 +1,8 @@
-"""GeoDrops binary sensors: 4 per probe."""
+"""GeoDrops binary sensors: 4 per probe.
+
+Battery Status comes from the coordinator's battery outlook; the rest are flags
+from the probe's latest reading.
+"""
 
 from __future__ import annotations
 
@@ -16,6 +20,7 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
+from . import const
 from .const import DeviceConfig
 from .coordinator import GeoDropsConfigEntry, GeoDropsCoordinator
 from .entity import GeoDropsEntity
@@ -39,18 +44,26 @@ class GeoDropsBinarySensorEntityDescription(BinarySensorEntityDescription):
     re-created). `translation_key` names it in strings.json.
     """
 
-    value_fn: Callable[[DeviceReading], bool | None]
+    value_fn: Callable[[DeviceReading], bool | None] | None = None
+    """The flag from the latest reading."""
+    coordinator_fn: Callable[[GeoDropsCoordinator, int], bool | None] | None = None
+    """The flag from the coordinator, given the device id; set instead of value_fn."""
+
+
+def _battery_low(coordinator: GeoDropsCoordinator, device_id: int) -> bool | None:
+    """Return whether the batteries need replacing soon, or None if unknown."""
+    outlook = coordinator.battery_outlook(device_id)
+    return None if outlook is None else outlook != "ok"
 
 
 BINARY_SENSOR_DESCRIPTIONS: tuple[GeoDropsBinarySensorEntityDescription, ...] = (
     GeoDropsBinarySensorEntityDescription(
         key="battery_poor",
         translation_key="battery_status",
-        value_fn=lambda r: r.battery_poor,
-        device_class=BinarySensorDeviceClass.PROBLEM,
+        # The key predates the battery trend; it keeps the unique id.
+        coordinator_fn=_battery_low,
+        device_class=BinarySensorDeviceClass.BATTERY,
         entity_category=EntityCategory.DIAGNOSTIC,
-        # Only applies when a probe is first added.
-        entity_registry_enabled_default=False,
     ),
     # From GeoDrops' nextAction codes; see transform.py.
     GeoDropsBinarySensorEntityDescription(
@@ -89,9 +102,15 @@ class GeoDropsBinarySensor(GeoDropsEntity, BinarySensorEntity):
 
     @property
     def is_on(self) -> bool | None:
-        """Return the flag from the latest reading."""
+        """Return the flag, unknown while there is no reading."""
         r = self._reading
-        return None if r is None else self.entity_description.value_fn(r)
+        if r is None:
+            return None
+        desc = self.entity_description
+        if desc.coordinator_fn is not None:
+            return desc.coordinator_fn(self.coordinator, self._device[const.DEV_ID])
+        assert desc.value_fn is not None
+        return desc.value_fn(r)
 
 
 def build_binary_sensors(
