@@ -85,8 +85,8 @@ coverage. All of this shipped in 0.6.0; see [History](#history).
 | docs-use-cases | Done | README "Use cases". |
 | dynamic-devices | Exempt | GeoDrops' table is public and shared; there is no per-account device list to watch. Probes are user-declared by serial. |
 | entity-category | Done | Battery, Battery Status, Battery Voltage, Signal Strength, Cloud Upload Delay, Last Reading, Reading Quality, Reading Quality Depth 1–3, Probe Health, Next Action Codes, Watering Confidence and the Max Moisture Calibration, Max Moisture Recalibration and Hardware Status binary sensors are diagnostic. |
-| entity-device-class | Done | Cloud Upload Delay is a duration. Avg. 7-Day Sun is hours per day, a rate, so it has none. |
-| entity-disabled-by-default | Done | Battery Voltage, Signal Strength, Cloud Upload Delay, Avg. 7-Day Sun, Next Action Codes, Battery Status, Max Moisture Recalibration and Hardware Status, for newly added probes. Reading Quality Depth 1–3 stay enabled: irrigation integrations read their states, and a disabled entity has none. |
+| entity-device-class | Done | Cloud Upload Delay is a duration. Battery Status is a battery binary sensor, so low-battery cards and blueprints find it. Avg. 7-Day Sun is hours per day, a rate, so it has none. |
+| entity-disabled-by-default | Done | Battery Voltage, Signal Strength, Cloud Upload Delay, Avg. 7-Day Sun, Next Action Codes, Max Moisture Recalibration and Hardware Status, for newly added probes. Battery Status became enabled by default when it took over the battery warning; a one-time entry migration enables it on existing installs unless the user disabled it. Reading Quality Depth 1–3 stay enabled: irrigation integrations read their states, and a disabled entity has none. |
 | entity-translations | Done | |
 | exception-translations | Done | `exceptions` in `strings.json`; every raised HA exception uses a translation key. |
 | icon-translations | Done | `icons.json` with state icons. |

@@ -143,6 +143,7 @@ class GeoDropsConfigFlow(ConfigFlow, domain=const.DOMAIN):
     """Set up GeoDrops: a GCP project and key, then the first probe."""
 
     VERSION = 1
+    MINOR_VERSION = 2
 
     def __init__(self) -> None:
         """Start with no project or key; the user step sets them."""

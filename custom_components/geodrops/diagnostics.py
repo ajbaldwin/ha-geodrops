@@ -39,10 +39,18 @@ async def async_get_config_entry_diagnostics(
         device_id = device[const.DEV_ID]
         reading = coordinator.reading(device_id)
         seen = coordinator.reading_time(device_id)
+        trend = coordinator.battery_trend(device_id)
         probes[device[const.DEV_SERIAL]] = {
             "device_id": device_id,
             "last_seen_in_poll": seen.isoformat() if seen else None,
             "reading": _reading_dict(reading) if reading else None,
+            "battery": {
+                "outlook": coordinator.battery_outlook(device_id),
+                "slope_mv_per_day": trend.slope if trend else None,
+                "daily_mv": [[day.isoformat(), mv] for day, mv in trend.daily]
+                if trend
+                else [],
+            },
         }
     interval = coordinator.update_interval
     return {

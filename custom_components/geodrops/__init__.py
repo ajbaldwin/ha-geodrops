@@ -7,7 +7,7 @@ from aiogeodrops import GeoDropsClient, GeoDropsCredentialsError
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
-from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from . import const
@@ -46,6 +46,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: GeoDropsConfigEntry) -> 
         )
     )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    return True
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: GeoDropsConfigEntry) -> bool:
+    """Migrate an entry from an older version of the integration.
+
+    Home Assistant itself refuses an entry from a newer major version.
+    """
+    if entry.minor_version < 2:
+        # Battery Status was disabled by default; now it is the battery warning,
+        # so turn it on once for existing installs. One the user disabled stays so.
+        # Home Assistant reloads the entry about 30 s later to add the entity.
+        registry = er.async_get(hass)
+        for entity in er.async_entries_for_config_entry(registry, entry.entry_id):
+            if (
+                entity.unique_id.endswith("_battery_poor")
+                and entity.disabled_by is er.RegistryEntryDisabler.INTEGRATION
+            ):
+                registry.async_update_entity(entity.entity_id, disabled_by=None)
+        hass.config_entries.async_update_entry(entry, minor_version=2)
     return True
 
 

@@ -154,6 +154,10 @@
       "title": "{name}'s max-moisture calibration has expired",
       "description": "GeoDrops asks for the max-moisture (deep water) test to be run again on probe {name} ({serial}). It does this 75 days after the last one. Moisture keeps reporting meanwhile, but its quality drops. Open the GeoDrops app, select the probe and run the deep water test again. This message goes away once GeoDrops has the new calibration, which can take a few hours to show up."
     },
+    "battery_replace": {
+      "title": "Replace the batteries in {name}",
+      "description": "The battery voltage of probe {name} ({serial}) is falling fast or is below 4.4 V, so it is likely to stop reporting within days. Replace its batteries now. This message goes away on its own within about two days of fresh batteries going in."
+    },
     "probe_offline": {
       "title": "{name} has stopped reporting",
       "description": "Probe {name} ({serial}) hasn't sent GeoDrops a reading for more than {hours} hours. Check in the GeoDrops app that it is online; a weak Wi-Fi signal or a flat battery are the usual causes. This message goes away on its own once the probe reports again."

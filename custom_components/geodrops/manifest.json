@@ -7,6 +7,6 @@
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/ajbaldwin/ha-geodrops-hacs/issues",
   "loggers": ["aiogeodrops"],
-  "requirements": ["aiogeodrops==0.4.0"],
+  "requirements": ["aiogeodrops==0.4.1"],
   "version": "0.9.0-beta.3"
 }

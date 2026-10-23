@@ -20,7 +20,8 @@ from homeassistant.helpers import device_registry as dr, issue_registry as ir
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
-from . import const
+from . import battery, const
+from .battery import HISTORY_DAYS, BatteryOutlook, BatteryTrend
 from .const import DeviceConfig
 from .redact import redact_account
 from .transform import (
@@ -43,6 +44,11 @@ PROBE_ISSUES = (
     # The calibration is 75 days old; moisture keeps reporting, degraded.
     ("max_moisture_recalibration", RECALIBRATION_CODES),
 )
+
+# The battery history is fetched twice a day (it only moves slowly), and again
+# after an hour if the fetch fails.
+BATTERY_REFRESH = timedelta(hours=12)
+BATTERY_RETRY = timedelta(hours=1)
 
 type GeoDropsConfigEntry = ConfigEntry[GeoDropsCoordinator]
 
@@ -71,6 +77,8 @@ def _newer(
 # or, when every probe is, once for the whole entry.
 PROBE_OFFLINE = "probe_offline"
 DATA_DELAYED = "data_delayed"
+# Raised when a probe's battery voltage says it is about to run out.
+BATTERY_REPLACE = "battery_replace"
 
 
 def data_delayed_issue_id(entry_id: str) -> str:
@@ -81,6 +89,11 @@ def data_delayed_issue_id(entry_id: str) -> str:
 def offline_issue_id(entry_id: str, serial: str) -> str:
     """Return the id of a probe's offline repair issue."""
     return f"{PROBE_OFFLINE}_{entry_id}_{serial}"
+
+
+def battery_issue_id(entry_id: str, serial: str) -> str:
+    """Return the id of a probe's "replace the batteries" repair issue."""
+    return f"{BATTERY_REPLACE}_{entry_id}_{serial}"
 
 
 def access_denied_issue_id(entry_id: str) -> str:
@@ -97,7 +110,11 @@ def delete_entry_issues(hass: HomeAssistant, entry_id: str) -> None:
     """Remove every repair issue the entry raised."""
     ir.async_delete_issue(hass, const.DOMAIN, access_denied_issue_id(entry_id))
     ir.async_delete_issue(hass, const.DOMAIN, data_delayed_issue_id(entry_id))
-    prefixes = (*probe_issue_prefixes(entry_id), offline_issue_id(entry_id, ""))
+    prefixes = (
+        *probe_issue_prefixes(entry_id),
+        offline_issue_id(entry_id, ""),
+        battery_issue_id(entry_id, ""),
+    )
     for domain, issue_id in list(ir.async_get(hass).issues):
         if domain == const.DOMAIN and issue_id.startswith(prefixes):
             ir.async_delete_issue(hass, const.DOMAIN, issue_id)
@@ -119,6 +136,15 @@ class GeoDropsCoordinator(DataUpdateCoordinator[dict[int, DeviceReading]]):
         self._seen: dict[int, datetime] = {}
         # Probes already logged as stale, so "warn after" logs once per episode.
         self._stale: set[int] = set()
+        # Each probe's battery trend, and when the history is next fetched (None:
+        # at the next poll). A failed fetch keeps the trends it had.
+        self._battery: dict[int, BatteryTrend] = {}
+        self._battery_due: datetime | None = None
+        # The probes the history was last fetched for: a new one fetches again.
+        self._battery_ids: set[int] = set()
+        # Each probe's voltage in the reading before its latest one. The floor
+        # check needs both below it, so one bad row can't raise a repair.
+        self._previous_mv: dict[int, float | None] = {}
         interval: int = entry.options.get(
             const.CONF_SCAN_INTERVAL, const.DEFAULT_SCAN_INTERVAL
         )
@@ -211,6 +237,23 @@ class GeoDropsCoordinator(DataUpdateCoordinator[dict[int, DeviceReading]]):
         """Return a probe's latest reading, or None if none has arrived yet."""
         return (self.data or {}).get(device_id)
 
+    def battery_trend(self, device_id: int) -> BatteryTrend | None:
+        """Return a probe's battery trend, or None until its history has loaded."""
+        return self._battery.get(device_id)
+
+    def battery_outlook(self, device_id: int) -> BatteryOutlook | None:
+        """Return whether a probe's batteries need replacing, if known."""
+        return self._outlook(device_id, self.reading(device_id))
+
+    def _outlook(
+        self, device_id: int, reading: DeviceReading | None
+    ) -> BatteryOutlook | None:
+        """Combine a probe's battery trend with its last two readings."""
+        latest = reading.battery_mv if reading else None
+        previous = self._previous_mv.get(device_id)
+        both = None if latest is None or previous is None else max(latest, previous)
+        return battery.battery_outlook(self._battery.get(device_id), both)
+
     def reading_time(self, device_id: int) -> datetime | None:
         """Return when a poll last returned a row for this probe."""
         return self._seen.get(device_id)
@@ -257,12 +300,56 @@ class GeoDropsCoordinator(DataUpdateCoordinator[dict[int, DeviceReading]]):
         previous = self.data or {}
         merged: dict[int, DeviceReading] = {}
         for device_id in ids:
-            reading = _newer(data.get(device_id), previous.get(device_id))
+            held = previous.get(device_id)
+            reading = _newer(data.get(device_id), held)
             if reading is not None:
                 merged[device_id] = reading
+                if held is not None and reading.read_at != held.read_at:
+                    self._previous_mv[device_id] = held.battery_mv
         self._seen = {d: t for d, t in self._seen.items() if d in ids}
+        self._previous_mv = {d: v for d, v in self._previous_mv.items() if d in ids}
+        await self._refresh_battery(ids, now)
         self._sync_issues(merged, now, enabled)
         return merged
+
+    async def _refresh_battery(self, ids: list[int], now: datetime) -> None:
+        """Fetch the battery history when it is due.
+
+        It is a second query, and the trend only matters to the battery
+        sensor and repair, so a failure must not fail the poll.
+        """
+        if set(ids) != self._battery_ids:
+            # A probe re-enabled in Home Assistant shouldn't wait half a day.
+            self._battery_due = None
+        if self._battery_due is not None and now < self._battery_due:
+            return
+        self._battery_ids = set(ids)
+        try:
+            history = await self.client.fetch_battery_history(ids, HISTORY_DAYS)
+        except GeoDropsError as err:
+            self._battery_due = now + BATTERY_RETRY
+            _LOGGER.debug("Battery history query failed: %s", self._redact(err))
+            return
+        except (TypeError, ValueError) as err:
+            # A row aiogeodrops can't parse (e.g. after GeoDrops changes a
+            # column's type) mustn't take the readings down with it.
+            self._battery_due = now + BATTERY_RETRY
+            _LOGGER.debug("Battery history couldn't be read: %s", err)
+            return
+        self._battery_due = now + BATTERY_REFRESH
+        trends: dict[int, BatteryTrend] = {}
+        for device_id in ids:
+            trend = battery.battery_trend(history.get(device_id, []))
+            held = self._battery.get(device_id)
+            # A table reload can serve only older rows: keep what we had.
+            if (
+                held is not None
+                and held.daily
+                and (not trend.daily or trend.daily[-1][0] < held.daily[-1][0])
+            ):
+                trend = held
+            trends[device_id] = trend
+        self._battery = trends
 
     def _sync_issues(
         self,
@@ -274,6 +361,7 @@ class GeoDropsCoordinator(DataUpdateCoordinator[dict[int, DeviceReading]]):
         self._log_staleness(readings, now, enabled)
         self._sync_probe_issues(readings, enabled)
         self._sync_offline_issues(readings, now, enabled)
+        self._sync_battery_issues(readings, enabled)
 
     def _redact(self, err: GeoDropsError) -> str:
         """Strip the user's GCP account from the error, and return its text.
@@ -352,6 +440,53 @@ class GeoDropsCoordinator(DataUpdateCoordinator[dict[int, DeviceReading]]):
             if (
                 domain == const.DOMAIN
                 and issue_id.startswith(prefixes)
+                and issue_id not in wanted
+            ):
+                ir.async_delete_issue(self.hass, const.DOMAIN, issue_id)
+
+    def _sync_battery_issues(
+        self, readings: dict[int, DeviceReading], enabled: list[DeviceConfig]
+    ) -> None:
+        """Raise a repair for each probe whose batteries need replacing now.
+
+        Each clears once the outlook is better. A probe whose outlook is unknown
+        (its history hasn't loaded yet) keeps its issue as it is. An inactive or
+        disabled probe has none: they drop with the sweep below.
+        """
+        entry_id = self.config_entry.entry_id
+        wanted: set[str] = set()
+        for device in enabled:
+            if not device_active(device):
+                continue
+            serial = device[const.DEV_SERIAL]
+            issue_id = battery_issue_id(entry_id, serial)
+            wanted.add(issue_id)
+            # From `readings`, not self.data: that isn't updated until the poll ends.
+            outlook = self._outlook(
+                device[const.DEV_ID], readings.get(device[const.DEV_ID])
+            )
+            if outlook == "now":
+                ir.async_create_issue(
+                    self.hass,
+                    const.DOMAIN,
+                    issue_id,
+                    is_fixable=False,
+                    severity=ir.IssueSeverity.ERROR,
+                    translation_key=BATTERY_REPLACE,
+                    translation_placeholders={
+                        "name": device[const.DEV_NAME],
+                        "serial": serial,
+                    },
+                    learn_more_url=TROUBLESHOOTING_URL,
+                )
+            elif outlook is not None:
+                ir.async_delete_issue(self.hass, const.DOMAIN, issue_id)
+        # Removed, disabled and inactive probes take their issues with them.
+        prefix = battery_issue_id(entry_id, "")
+        for domain, issue_id in list(ir.async_get(self.hass).issues):
+            if (
+                domain == const.DOMAIN
+                and issue_id.startswith(prefix)
                 and issue_id not in wanted
             ):
                 ir.async_delete_issue(self.hass, const.DOMAIN, issue_id)

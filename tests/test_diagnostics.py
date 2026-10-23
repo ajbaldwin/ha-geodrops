@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 import json
 from unittest.mock import MagicMock
 
-from aiogeodrops import DeviceReading, GeoDropsQueryError
+from aiogeodrops import BatteryPoint, DeviceReading, GeoDropsQueryError
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.geodrops import const
@@ -36,7 +36,7 @@ def _reading():
     )
 
 
-async def _setup(hass, credentials='{"private_key":"secret"}'):
+async def _setup(hass, credentials='{"private_key":"secret"}', history=None):
     entry = MockConfigEntry(
         domain=const.DOMAIN,
         unique_id="my-project",
@@ -52,7 +52,10 @@ async def _setup(hass, credentials='{"private_key":"secret"}'):
         },
     )
     entry.add_to_hass(hass)
-    with patch_client("fetch_latest", return_value={1001: _reading()}):
+    with (
+        patch_client("fetch_latest", return_value={1001: _reading()}),
+        patch_client("fetch_battery_history", return_value=history or {}),
+    ):
         await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
     return entry
@@ -94,7 +97,22 @@ async def test_diagnostics_show_each_probes_last_reading(hass):
         "device_id": 1002,
         "last_seen_in_poll": None,
         "reading": None,
+        "battery": {"outlook": None, "slope_mv_per_day": None, "daily_mv": []},
     }
+
+
+async def test_diagnostics_show_each_probes_battery_trend(hass):
+    days = [datetime(2026, 9, 16 + d, 12, 0, tzinfo=UTC) for d in range(14)]
+    history = {1001: [BatteryPoint(t, 5400.0 - 4 * d) for d, t in enumerate(days)]}
+    entry = await _setup(hass, history=history)
+    probes = (await async_get_config_entry_diagnostics(hass, entry))["probes"]
+
+    battery = probes["AAA111"]["battery"]
+    assert battery["outlook"] == "ok"
+    assert battery["slope_mv_per_day"] == -4.0
+    assert battery["daily_mv"][0] == ["2026-09-16", 5400.0]
+    assert battery["daily_mv"][-1] == ["2026-09-29", 5348.0]
+    json_dumps(probes)
 
 
 async def test_diagnostics_redact_the_project_from_the_last_error(hass):

@@ -201,8 +201,8 @@ switch (see [Taking a probe out of service](#taking-a-probe-out-of-service)):
 | Max Moisture Calibration | Problem when GeoDrops asks you to run the max-moisture (deep water) test in its app; moisture stays `unknown` until you do. Also raised as a repair (binary sensor) |
 | Max Moisture Recalibration | Problem when the probe's max-moisture calibration has expired (75 days after the last one) and GeoDrops asks for the test to be run again; moisture keeps reporting meanwhile, at reduced quality. Also raised as a repair. Formerly Wick Status (binary sensor) |
 | Hardware Status | Problem when GeoDrops asks for a hardware check or reports a hardware error (binary sensor) |
-| Battery | Probe battery level (%) |
-| Battery Status | Problem when GeoDrops flags the battery as poor quality (binary sensor) |
+| Battery | Probe battery level (%), as GeoDrops reports it. See [Battery warning](#battery-warning) for why it can mislead |
+| Battery Status | Low when the batteries need replacing soon, judged from how fast the probe's voltage is falling; see [Battery warning](#battery-warning) (binary sensor) |
 | Battery Voltage | Battery voltage (mV) |
 | Signal Strength | The probe's radio signal strength (dBm) |
 | Cloud Upload Delay | The upload delay GeoDrops reports for the latest reading (hours), usually about 1. It isn't how old the data is; Last Reading shows that. `unknown` when GeoDrops reports an impossible value. Formerly Sync Delay. |
@@ -233,10 +233,37 @@ Battery, Battery Status, Battery Voltage, Signal Strength, Cloud Upload Delay, L
 Reading, Reading Quality, Reading Quality Depth 1–3, Probe Health, Next Action Codes, Watering Confidence and the Max
 Moisture Calibration, Max Moisture Recalibration and Hardware Status sensors are **diagnostic** sensors: they are listed under *Diagnostic* on the device page and left off
 auto-generated dashboards. Battery Voltage, Signal Strength, Cloud Upload Delay,
-Avg. 7-Day Sun, Next Action Codes, Battery Status, Max Moisture Recalibration and Hardware Status are **disabled by default** on newly added probes; enable them from the device page if you want
+Avg. 7-Day Sun, Next Action Codes, Max Moisture Recalibration and Hardware Status are **disabled by default** on newly added probes; enable them from the device page if you want
 them. The
 Reading Quality sensors stay enabled, because automations and other integrations use
 them to decide whether a moisture reading can be trusted.
+
+### Battery warning
+
+GeoDrops' battery percentage is a straight line from 4.0 V (0 %) to about
+6.57 V (100 %). Probes run on packs whose voltages differ by more than 2 V,
+so a full low-voltage pack can read 10–30 % and a high-voltage pack can read
+100 % until shortly before it dies. A pack's voltage also falls off a cliff
+at the end: a probe can go from 40 % to silent in about two days.
+
+So Battery Status judges each probe by how fast its own voltage is falling,
+from the last 14 days of readings (fetched twice a day):
+
+- **Replace soon** (Battery Status is Low): over the last week the voltage
+  fell 10 mV a day or more and is below 5.4 V. Normal drain is about 4 mV a
+  day.
+- **Replace now** (also Low, plus a repair): it fell 20 mV a day or more, or
+  is below 4.4 V. Expect the probe to stop reporting within days.
+
+A drained pack's voltage climbs back for a few days when it rests, so Replace
+now stays until the voltage is back above where it was when the fall began.
+Fresh batteries clear it within about two days. Battery Status is `unknown`
+until a probe has a week of readings.
+
+The thresholds come from GeoDrops' fleet: 166 probes over two months.
+Of 8 batteries that ran out in that time, 6 showed Replace soon at least a
+week before they collapsed. Some batteries give no warning at all, so keep
+the offline repair on too.
 
 ### States for automations
 
@@ -283,17 +310,18 @@ conditions:
     state: ["dry", "dry_plus"]
 ```
 
-Get notified when a probe's battery is low:
+Get notified when a probe's batteries need replacing (Battery Status turns
+Low):
 
 ```yaml
 triggers:
-  - trigger: numeric_state
-    entity_id: sensor.front_battery
-    below: 20
+  - trigger: state
+    entity_id: binary_sensor.front_battery_status
+    to: "on"
 actions:
   - action: notify.notify
     data:
-      message: "GeoDrops probe Front battery is at {{ states('sensor.front_battery') }}%."
+      message: "Replace the batteries in GeoDrops probe Front soon."
 ```
 
 Warn about near-freezing soil:
@@ -316,8 +344,10 @@ reading for *all* configured probes at once — it does not issue one query
 per device. The default poll interval is **20 minutes**, adjustable in the
 integration's options (Settings → Devices & Services → GeoDrops →
 Configure → Advanced Options), along with the lookback window
-and staleness thresholds. At this query pattern and a typical handful of
-probes, usage stays well within BigQuery's free tier.
+and staleness thresholds. Twice a day it also makes one query for the last
+14 days of every probe's battery voltage, for the
+[battery warning](#battery-warning). At this query pattern and a typical
+handful of probes, usage stays well within BigQuery's free tier.
 
 ## Known limitations
 
@@ -378,6 +408,11 @@ probe's latest reading is older than "Offline alert after" (24 hours by
 default). Check in the GeoDrops app that it is online; Wi-Fi and the battery
 are the usual causes. The repair clears itself once the probe reports again,
 and stays across restarts until then.
+
+**A "Replace the batteries" repair.** That probe's battery voltage is
+falling fast or is below 4.4 V, so it will likely stop reporting within days.
+Replace its batteries; the repair clears itself within about two days. See
+[Battery warning](#battery-warning).
 
 **A "GeoDrops data is delayed" repair.** Every probe stopped at once, which
 points at GeoDrops rather than your probes. It clears itself once readings
