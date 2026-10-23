@@ -14,9 +14,9 @@ from aiogeodrops import (
 )
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed
-from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers import device_registry as dr, issue_registry as ir
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
@@ -45,6 +45,11 @@ PROBE_ISSUES = (
 )
 
 type GeoDropsConfigEntry = ConfigEntry[GeoDropsCoordinator]
+
+
+def device_active(device: DeviceConfig) -> bool:
+    """Return whether the user has the probe in service (the default)."""
+    return device.get(const.DEV_ACTIVE, True)
 
 
 def _newer(
@@ -134,9 +139,65 @@ class GeoDropsCoordinator(DataUpdateCoordinator[dict[int, DeviceReading]]):
         return devices
 
     @property
+    def enabled_devices(self) -> list[DeviceConfig]:
+        """The configured probes whose device isn't disabled in Home Assistant."""
+        disabled = {
+            serial
+            for device in dr.async_entries_for_config_entry(
+                dr.async_get(self.hass), self.config_entry.entry_id
+            )
+            if device.disabled_by is not None
+            for domain, serial in device.identifiers
+            if domain == const.DOMAIN
+        }
+        return [d for d in self.devices if d[const.DEV_SERIAL] not in disabled]
+
+    @property
     def device_ids(self) -> list[int]:
-        """GeoDrops device ids of the configured probes."""
-        return [d[const.DEV_ID] for d in self.devices]
+        """GeoDrops device ids of the probes to poll: every enabled one."""
+        return [d[const.DEV_ID] for d in self.enabled_devices]
+
+    def is_active(self, serial: str) -> bool:
+        """Return whether the probe is in service, per the entry's current options."""
+        return any(
+            device_active(d) for d in self.devices if d[const.DEV_SERIAL] == serial
+        )
+
+    @callback
+    def set_active(self, serial: str, active: bool) -> None:
+        """Take a probe out of service, or put it back, without a reload.
+
+        The flag is stored in the options (absent means active, so they look as
+        they did before), then the repairs are re-synced and the entities told
+        at once rather than at the next poll.
+        """
+        entry = self.config_entry
+        devices: list[DeviceConfig] = []
+        for device in self.devices:
+            if device[const.DEV_SERIAL] == serial:
+                device = device.copy()
+                device.pop(const.DEV_ACTIVE, None)
+                if not active:
+                    device[const.DEV_ACTIVE] = False
+            devices.append(device)
+        self.hass.config_entries.async_update_entry(
+            entry, options={**entry.options, const.CONF_DEVICES: devices}
+        )
+        self._sync_issues(self.data or {}, dt_util.utcnow(), self.enabled_devices)
+        self.async_update_listeners()
+
+    @callback
+    def async_device_updated(
+        self, event: Event[dr.EventDeviceRegistryUpdatedData]
+    ) -> None:
+        """Re-sync the repairs at once when one of the probes is disabled or enabled."""
+        data = event.data
+        if data["action"] != "update" or "disabled_by" not in data["changes"]:
+            return
+        device = dr.async_get(self.hass).async_get(data["device_id"])
+        if device is None or self.config_entry.entry_id not in device.config_entries:
+            return
+        self._sync_issues(self.data or {}, dt_util.utcnow(), self.enabled_devices)
 
     @property
     def lookback_hours(self) -> int:
@@ -155,11 +216,13 @@ class GeoDropsCoordinator(DataUpdateCoordinator[dict[int, DeviceReading]]):
         return self._seen.get(device_id)
 
     async def _async_update_data(self) -> dict[int, DeviceReading]:
-        ids = self.device_ids
+        # Read once per poll: it scans the device registry.
+        enabled = self.enabled_devices
+        ids = [d[const.DEV_ID] for d in enabled]
         if not ids:
             self._seen = {}
             self._clear_access_denied()
-            self._sync_probe_issues({})
+            self._sync_issues({}, dt_util.utcnow(), enabled)
             return {}
         # Home Assistant logs these errors, and logs get pasted into public
         # issues, so Google's text loses the project and service account. The
@@ -198,10 +261,19 @@ class GeoDropsCoordinator(DataUpdateCoordinator[dict[int, DeviceReading]]):
             if reading is not None:
                 merged[device_id] = reading
         self._seen = {d: t for d, t in self._seen.items() if d in ids}
-        self._log_staleness(merged, now)
-        self._sync_probe_issues(merged)
-        self._sync_offline_issues(merged, now)
+        self._sync_issues(merged, now, enabled)
         return merged
+
+    def _sync_issues(
+        self,
+        readings: dict[int, DeviceReading],
+        now: datetime,
+        enabled: list[DeviceConfig],
+    ) -> None:
+        """Bring the staleness log and every repair up to date."""
+        self._log_staleness(readings, now, enabled)
+        self._sync_probe_issues(readings, enabled)
+        self._sync_offline_issues(readings, now, enabled)
 
     def _redact(self, err: GeoDropsError) -> str:
         """Strip the user's GCP account from the error, and return its text.
@@ -234,16 +306,21 @@ class GeoDropsCoordinator(DataUpdateCoordinator[dict[int, DeviceReading]]):
             self.hass, const.DOMAIN, access_denied_issue_id(self.config_entry.entry_id)
         )
 
-    def _sync_probe_issues(self, readings: dict[int, DeviceReading]) -> None:
+    def _sync_probe_issues(
+        self, readings: dict[int, DeviceReading], enabled: list[DeviceConfig]
+    ) -> None:
         """Raise a repair for each probe GeoDrops wants max-moisture calibrated.
 
         Only the user can run the test, in GeoDrops' app, so it is worth a
         repair. Each issue clears once its code goes away. A probe with no
-        reading or no nextAction column keeps its issues as they are.
+        reading or no nextAction column keeps its issues as they are. An
+        inactive or disabled probe has none: they drop with the sweep below.
         """
         entry_id = self.config_entry.entry_id
         wanted: set[str] = set()
-        for device in self.devices:
+        for device in enabled:
+            if not device_active(device):
+                continue
             serial = device[const.DEV_SERIAL]
             reading = readings.get(device[const.DEV_ID])
             for key, codes in PROBE_ISSUES:
@@ -268,7 +345,8 @@ class GeoDropsCoordinator(DataUpdateCoordinator[dict[int, DeviceReading]]):
                     )
                 elif needed is False:
                     ir.async_delete_issue(self.hass, const.DOMAIN, issue_id)
-        # Probes removed from the options take their issues with them.
+        # Probes removed from the options, or out of service, take their issues
+        # with them.
         prefixes = probe_issue_prefixes(entry_id)
         for domain, issue_id in list(ir.async_get(self.hass).issues):
             if (
@@ -279,7 +357,10 @@ class GeoDropsCoordinator(DataUpdateCoordinator[dict[int, DeviceReading]]):
                 ir.async_delete_issue(self.hass, const.DOMAIN, issue_id)
 
     def _sync_offline_issues(
-        self, readings: dict[int, DeviceReading], now: datetime
+        self,
+        readings: dict[int, DeviceReading],
+        now: datetime,
+        enabled: list[DeviceConfig],
     ) -> None:
         """Raise a repair for each probe silent past "Offline alert after".
 
@@ -287,20 +368,28 @@ class GeoDropsCoordinator(DataUpdateCoordinator[dict[int, DeviceReading]]):
         GeoDrops' data rather than the probes, so one entry-wide issue replaces
         the per-probe ones. A probe with no reading (after a restart, silent for
         longer than the lookback) keeps its issues as they are: they persist.
+
+        Inactive and disabled probes raise none and never count as silent. An
+        inactive probe that is reporting still shows the data is flowing.
         """
         options = self.config_entry.options
         hours: int = options.get(const.CONF_ALERT_HOURS, const.DEFAULT_ALERT_HOURS)
         entry_id = self.config_entry.entry_id
+        active = [d for d in enabled if device_active(d)]
         offline: list[DeviceConfig] = []
         fresh: list[DeviceConfig] = []
-        for device in self.devices:
+        for device in enabled:
             reading = readings.get(device[const.DEV_ID])
             age = None if reading is None else data_age_hours(reading, now)
-            if age is not None:
-                (offline if age > hours else fresh).append(device)
+            if age is None:
+                continue
+            if age <= hours:
+                fresh.append(device)
+            elif device_active(device):
+                offline.append(device)
         delayed_id = data_delayed_issue_id(entry_id)
         registry = ir.async_get(self.hass)
-        if len(self.devices) >= 2 and len(offline) >= 2 and not fresh:
+        if len(active) >= 2 and len(offline) >= 2 and not fresh:
             ir.async_create_issue(
                 self.hass,
                 const.DOMAIN,
@@ -314,12 +403,13 @@ class GeoDropsCoordinator(DataUpdateCoordinator[dict[int, DeviceReading]]):
             )
             wanted: set[str] = set()
         else:
-            if fresh:
+            # Fewer than two probes in service can't be "every probe" silent.
+            if fresh or len(active) < 2:
                 ir.async_delete_issue(self.hass, const.DOMAIN, delayed_id)
             delayed = registry.async_get_issue(const.DOMAIN, delayed_id) is not None
             wanted = {
                 offline_issue_id(entry_id, d[const.DEV_SERIAL])
-                for d in self.devices
+                for d in active
                 if d not in fresh
             }
             for device in [] if delayed else offline:
@@ -338,8 +428,8 @@ class GeoDropsCoordinator(DataUpdateCoordinator[dict[int, DeviceReading]]):
                     },
                     learn_more_url=TROUBLESHOOTING_URL,
                 )
-        # Reporting probes, removed probes and, under the entry-wide issue,
-        # every probe drop their offline issues.
+        # Reporting, inactive, disabled and removed probes and, under the
+        # entry-wide issue, every probe drop their offline issues.
         prefix = offline_issue_id(entry_id, "")
         for domain, issue_id in list(registry.issues):
             if (
@@ -349,12 +439,20 @@ class GeoDropsCoordinator(DataUpdateCoordinator[dict[int, DeviceReading]]):
             ):
                 ir.async_delete_issue(self.hass, const.DOMAIN, issue_id)
 
-    def _log_staleness(self, readings: dict[int, DeviceReading], now: datetime) -> None:
+    def _log_staleness(
+        self,
+        readings: dict[int, DeviceReading],
+        now: datetime,
+        enabled: list[DeviceConfig],
+    ) -> None:
         """Warn once when a probe's data passes "warn after"; note when it recovers."""
         options = self.config_entry.options
         warn: int = options.get(const.CONF_WARN_HOURS, const.DEFAULT_WARN_HOURS)
         skip: int = options.get(const.CONF_SKIP_HOURS, const.DEFAULT_SKIP_HOURS)
-        for device in self.devices:
+        active = [d for d in enabled if device_active(d)]
+        # Out of service ends an episode: back in service, it can warn again.
+        self._stale &= {d[const.DEV_ID] for d in active}
+        for device in active:
             device_id = device[const.DEV_ID]
             reading = readings.get(device_id)
             age = None if reading is None else data_age_hours(reading, now)

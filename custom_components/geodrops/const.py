@@ -20,6 +20,7 @@ CONF_SKIP_HOURS: Final = "staleness_skip_hours"
 CONF_WARN_HOURS: Final = "staleness_warn_hours"
 
 # Keys in each DeviceConfig.
+DEV_ACTIVE: Final = "active"  # Optional: False when the probe is out of service.
 DEV_AREA: Final = "area_id"  # Optional: the HA area chosen when the probe was added.
 DEV_ID: Final = "device_id"
 DEV_NAME: Final = "name"
@@ -46,3 +47,4 @@ class DeviceConfig(TypedDict):
     device_id: int
     name: str
     area_id: NotRequired[str]
+    active: NotRequired[bool]  # Absent means True.

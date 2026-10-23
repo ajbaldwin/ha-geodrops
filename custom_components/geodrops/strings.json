@@ -160,7 +160,7 @@
     },
     "data_delayed": {
       "title": "GeoDrops data is delayed",
-      "description": "None of your probes has a reading newer than {hours} hours. When every probe stops at once, the delay is usually on GeoDrops' side rather than at the probes. If it lasts, check the GeoDrops app and contact GeoDrops. This message goes away on its own once readings arrive again."
+      "description": "None of your probes has a reading newer than {hours} hours. When every probe stops at once, the delay is usually on GeoDrops' side rather than at the probes. If it lasts, check the GeoDrops app and contact GeoDrops. This message goes away on its own once readings arrive again. If you've taken probes out for the season, turn off their Active switch."
     }
   },
   "entity": {
@@ -176,6 +176,11 @@
       },
       "max_moisture_recalibration": {
         "name": "Max Moisture Recalibration"
+      }
+    },
+    "switch": {
+      "active": {
+        "name": "Active"
       }
     },
     "sensor": {
