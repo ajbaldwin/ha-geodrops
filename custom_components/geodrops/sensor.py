@@ -58,6 +58,9 @@ class GeoDropsSensorEntityDescription(SensorEntityDescription):
     value_fn: Callable[[DeviceReading], StateType | datetime]
     # Report None while every depth is still training.
     moisture_gated: bool = False
+    # Stay available while the probe is inactive (normal availability rules
+    # still apply).
+    available_when_inactive: bool = False
 
 
 def _moisture(
@@ -221,6 +224,7 @@ SENSOR_DESCRIPTIONS: tuple[GeoDropsSensorEntityDescription, ...] = (
     GeoDropsSensorEntityDescription(
         key="last_reading",
         translation_key="last_reading",
+        available_when_inactive=True,
         # GeoDrops labels a reading with the end of its half-hour slot, so a
         # mid-slot upload is up to 30 minutes ahead; never show a future time.
         value_fn=lambda r: (
@@ -296,6 +300,10 @@ class GeoDropsSensor(GeoDropsEntity, SensorEntity):
     entity_description: GeoDropsSensorEntityDescription
 
     @property
+    def _available_when_inactive(self) -> bool:  # type: ignore[override]
+        return self.entity_description.available_when_inactive
+
+    @property
     def native_value(self) -> StateType | datetime:
         """Return the sensor's value from the latest reading."""
         r = self._reading
@@ -346,7 +354,12 @@ class GeoDropsWateringSensor(GeoDropsEntity, RestoreEntity, SensorEntity):
 
     @property
     def available(self) -> bool:
-        """A watering already seen stays true while the probe is offline."""
+        """A watering already seen stays true while the probe is offline.
+
+        An inactive probe shows nothing, though.
+        """
+        if not self._active:
+            return False
         return self._watering is not None or super().available
 
     @property

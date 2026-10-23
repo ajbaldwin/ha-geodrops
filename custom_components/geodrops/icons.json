@@ -8,6 +8,14 @@
         "default": "mdi:calendar-refresh"
       }
     },
+    "switch": {
+      "active": {
+        "default": "mdi:power-plug",
+        "state": {
+          "off": "mdi:power-plug-off"
+        }
+      }
+    },
     "sensor": {
       "moisture_state": {
         "default": "mdi:help-circle",

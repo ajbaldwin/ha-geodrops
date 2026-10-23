@@ -145,7 +145,7 @@ Saving them reloads the integration.
 | Warn after (hours) | 12 | 1–168, at most "Mark unavailable after" | Writes one warning to the Home Assistant log when a probe's data gets older than this, and a note when it reports again. |
 | Mark unavailable after (hours) | 12 | 1–168 | Makes a probe's sensors unavailable once its latest reading is older than this, counted from when the probe took the reading. |
 | Expire after (minutes) | 80 | 5–10080, longer than the poll interval | Also makes a probe's sensors unavailable if its data hasn't come back from a poll for this long, for example during a Google outage. |
-| Offline alert after (hours) | 24 | 1–168 | Shows a repair once a probe's latest reading is older than this. When two or more probes are that old and none is reporting, shows one "GeoDrops data is delayed" repair instead. |
+| Offline alert after (hours) | 24 | 1–168 | Shows a repair once a probe's latest reading is older than this. When two or more active probes are that old and none is reporting, shows one "GeoDrops data is delayed" repair instead. |
 
 ### Rotating the key or changing project
 
@@ -163,9 +163,27 @@ example, a missing BigQuery Job User role) don't trigger this. Home Assistant
 keeps retrying those, and polling recovers on its own once you fix the role
 in GCP.
 
+### Taking a probe out of service
+
+Pulling probes for the winter, or while one waits for new batteries? Turn off
+the probe's **Active** switch (on its device page, under *Configuration*). While
+it is off:
+
+- The probe raises no repairs and writes no staleness warnings, and it never
+  counts toward "GeoDrops data is delayed".
+- All its sensors show as unavailable, so automations stop using its values and
+  dashboards show it as out of service. **Last Reading** stays live, so a probe
+  that is back in the ground and reporting is easy to spot.
+- The switch stays off until you turn it back on, across restarts.
+
+To take a probe out of use completely, disable its device instead (device page →
+⋮ → **Disable**). It is then left out of every poll and raises nothing. Enabling
+the device brings it back after a short delay.
+
 ## Sensors
 
-Each probe becomes one Home Assistant device with 27 sensors:
+Each probe becomes one Home Assistant device with 27 sensors and an Active
+switch (see [Taking a probe out of service](#taking-a-probe-out-of-service)):
 
 | Sensor | Description |
 | --- | --- |
@@ -363,12 +381,15 @@ and stays across restarts until then.
 
 **A "GeoDrops data is delayed" repair.** Every probe stopped at once, which
 points at GeoDrops rather than your probes. It clears itself once readings
-arrive again.
+arrive again. If you've pulled your probes for the season, turn off their
+Active switches instead; see
+[Taking a probe out of service](#taking-a-probe-out-of-service).
 
 **GeoDrops asks to re-authenticate.** Google stopped accepting the key. See
 [Rotating the key or changing project](#rotating-the-key-or-changing-project).
 
-**A probe's sensors are unavailable.** Its latest reading is older than
+**A probe's sensors are unavailable.** Check its Active switch first. Otherwise,
+its latest reading is older than
 "Mark unavailable after", or no reading has come back from a poll for
 "Expire after". Check that the probe is reporting in the GeoDrops app. To
 see whether Wi-Fi is the cause, enable its Signal Strength sensor and check

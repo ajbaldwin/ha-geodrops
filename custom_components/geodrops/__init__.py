@@ -14,7 +14,7 @@ from . import const
 from .const import DeviceConfig
 from .coordinator import GeoDropsConfigEntry, GeoDropsCoordinator, delete_entry_issues
 
-PLATFORMS = [Platform.BINARY_SENSOR, Platform.SENSOR]
+PLATFORMS = [Platform.BINARY_SENSOR, Platform.SENSOR, Platform.SWITCH]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: GeoDropsConfigEntry) -> bool:
@@ -40,6 +40,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: GeoDropsConfigEntry) -> 
     # and key/project changes through async_update_reload_and_abort, so no
     # update listener: one would reload a second time.
     entry.runtime_data = coordinator
+    entry.async_on_unload(
+        hass.bus.async_listen(
+            dr.EVENT_DEVICE_REGISTRY_UPDATED, coordinator.async_device_updated
+        )
+    )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
