@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.0-beta.4 — Battery warning
+**New**
+- **Battery Status now warns before a probe's batteries run out**, judging from how fast the probe's own voltage is falling rather than GeoDrops' flag, which only fired once the batteries had already failed.
+- **A probe whose batteries are about to fail shows in Repairs**, and the repair clears on its own within about two days of fresh batteries going in.
+
+**Changed**
+- **Battery Status is now enabled by default and shows Low or Normal**; existing installs get it turned on once, unless you turned it off yourself.
+
+No new entities. Home Assistant reloads the integration once, about 30 seconds after the update, to turn Battery Status on.
+
 ## 0.9.0-beta.3 — Seasonal probe removal
 **New**
 - **Each probe has an Active switch** on its device page: turn it off while a probe is out of the ground, and it raises no repairs and its sensors show as unavailable, except Last Reading.
