@@ -50,9 +50,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: GeoDropsConfigEntry) -> 
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: GeoDropsConfigEntry) -> bool:
-    """Migrate an entry from an older version of the integration."""
-    if entry.version > 1:
-        return False
+    """Migrate an entry from an older version of the integration.
+
+    Home Assistant itself refuses an entry from a newer major version.
+    """
     if entry.minor_version < 2:
         # Battery Status was disabled by default; now it is the battery warning,
         # so turn it on once for existing installs. One the user disabled stays so.
