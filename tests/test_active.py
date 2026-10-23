@@ -2,6 +2,7 @@
 
 from dataclasses import replace
 from datetime import timedelta
+from unittest.mock import patch
 
 from aiogeodrops import DeviceReading
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -313,3 +314,18 @@ async def test_disabled_probe_does_not_count_toward_data_delayed(hass):
     await hass.async_block_till_done()
     await _poll(hass, entry, {1002: _reading(1002, 30)})
     assert _issues(hass) == [f"probe_offline_{entry.entry_id}_BBB222"]
+
+
+async def test_another_integrations_device_is_ignored(hass):
+    entry = _entry(hass)
+    await _setup(hass, entry, {1001: _reading()})
+    other = MockConfigEntry(domain="other")
+    other.add_to_hass(hass)
+    registry = dr.async_get(hass)
+    device = registry.async_get_or_create(
+        config_entry_id=other.entry_id, identifiers={("other", "x")}
+    )
+    with patch.object(type(entry.runtime_data), "_sync_issues") as sync:
+        registry.async_update_device(device.id, disabled_by=dr.DeviceEntryDisabler.USER)
+        await hass.async_block_till_done()
+    sync.assert_not_called()
