@@ -140,6 +140,11 @@ class GeoDropsCoordinator(DataUpdateCoordinator[dict[int, DeviceReading]]):
         # at the next poll). A failed fetch keeps the trends it had.
         self._battery: dict[int, BatteryTrend] = {}
         self._battery_due: datetime | None = None
+        # The probes the history was last fetched for: a new one fetches again.
+        self._battery_ids: set[int] = set()
+        # Each probe's voltage in the reading before its latest one. The floor
+        # check needs both below it, so one bad row can't raise a repair.
+        self._previous_mv: dict[int, float | None] = {}
         interval: int = entry.options.get(
             const.CONF_SCAN_INTERVAL, const.DEFAULT_SCAN_INTERVAL
         )
@@ -243,10 +248,11 @@ class GeoDropsCoordinator(DataUpdateCoordinator[dict[int, DeviceReading]]):
     def _outlook(
         self, device_id: int, reading: DeviceReading | None
     ) -> BatteryOutlook | None:
-        """Combine a probe's battery trend with the given reading."""
-        return battery.battery_outlook(
-            self._battery.get(device_id), reading.battery_mv if reading else None
-        )
+        """Combine a probe's battery trend with its last two readings."""
+        latest = reading.battery_mv if reading else None
+        previous = self._previous_mv.get(device_id)
+        both = None if latest is None or previous is None else max(latest, previous)
+        return battery.battery_outlook(self._battery.get(device_id), both)
 
     def reading_time(self, device_id: int) -> datetime | None:
         """Return when a poll last returned a row for this probe."""
@@ -294,10 +300,14 @@ class GeoDropsCoordinator(DataUpdateCoordinator[dict[int, DeviceReading]]):
         previous = self.data or {}
         merged: dict[int, DeviceReading] = {}
         for device_id in ids:
-            reading = _newer(data.get(device_id), previous.get(device_id))
+            held = previous.get(device_id)
+            reading = _newer(data.get(device_id), held)
             if reading is not None:
                 merged[device_id] = reading
+                if held is not None and reading.read_at != held.read_at:
+                    self._previous_mv[device_id] = held.battery_mv
         self._seen = {d: t for d, t in self._seen.items() if d in ids}
+        self._previous_mv = {d: v for d, v in self._previous_mv.items() if d in ids}
         await self._refresh_battery(ids, now)
         self._sync_issues(merged, now, enabled)
         return merged
@@ -308,13 +318,23 @@ class GeoDropsCoordinator(DataUpdateCoordinator[dict[int, DeviceReading]]):
         It is a second query, and the trend only matters to the battery
         sensor and repair, so a failure must not fail the poll.
         """
+        if set(ids) != self._battery_ids:
+            # A probe re-enabled in Home Assistant shouldn't wait half a day.
+            self._battery_due = None
         if self._battery_due is not None and now < self._battery_due:
             return
+        self._battery_ids = set(ids)
         try:
             history = await self.client.fetch_battery_history(ids, HISTORY_DAYS)
         except GeoDropsError as err:
             self._battery_due = now + BATTERY_RETRY
             _LOGGER.debug("Battery history query failed: %s", self._redact(err))
+            return
+        except (TypeError, ValueError) as err:
+            # A row aiogeodrops can't parse (e.g. after GeoDrops changes a
+            # column's type) mustn't take the readings down with it.
+            self._battery_due = now + BATTERY_RETRY
+            _LOGGER.debug("Battery history couldn't be read: %s", err)
             return
         self._battery_due = now + BATTERY_REFRESH
         trends: dict[int, BatteryTrend] = {}

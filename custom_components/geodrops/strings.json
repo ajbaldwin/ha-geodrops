@@ -156,7 +156,7 @@
     },
     "battery_replace": {
       "title": "Replace the batteries in {name}",
-      "description": "The battery voltage of probe {name} ({serial}) is falling fast or is below 4.4 V, so it is likely to stop reporting within days. Replace its batteries now. This message goes away on its own a day or two after fresh batteries go in."
+      "description": "The battery voltage of probe {name} ({serial}) is falling fast or is below 4.4 V, so it is likely to stop reporting within days. Replace its batteries now. This message goes away on its own within about two days of fresh batteries going in."
     },
     "probe_offline": {
       "title": "{name} has stopped reporting",

@@ -25,7 +25,7 @@ def _entry(*devices):
     return entry
 
 
-def _reading(device_id=1001, battery_mv=5300.0):
+def _reading(device_id=1001, battery_mv=5300.0, hours_old=1.0):
     return DeviceReading(
         device_id=device_id,
         sync_delay_hours=1.0,
@@ -43,7 +43,7 @@ def _reading(device_id=1001, battery_mv=5300.0):
         qcn_d1=2,
         qcn_d2=2,
         qcn_d3=2,
-        read_at=dt_util.utcnow() - timedelta(hours=1),
+        read_at=dt_util.utcnow() - timedelta(hours=hours_old),
         battery_mv=battery_mv,
     )
 
@@ -143,11 +143,44 @@ async def test_older_battery_history_does_not_replace_the_held_one(hass, freezer
     assert coord.battery_outlook(1001) == "now"
 
 
-async def test_latest_reading_below_the_floor_is_replace_now(hass):
+async def test_two_readings_below_the_floor_are_replace_now(hass):
     coord = _coordinator(hass, history={})
-    await _poll(coord, {1001: _reading(battery_mv=4390.0)})
+    await _poll(coord, {1001: _reading(battery_mv=4390.0, hours_old=2)})
+    assert coord.battery_outlook(1001) is None
+    await _poll(coord, {1001: _reading(battery_mv=4380.0, hours_old=1)})
     assert coord.battery_trend(1001).outlook is None
     assert coord.battery_outlook(1001) == "now"
+
+
+async def test_one_low_reading_is_not_enough(hass):
+    # GeoDrops occasionally serves a single bad row.
+    coord = _coordinator(hass)
+    await _poll(coord, {1001: _reading(battery_mv=5300.0, hours_old=2)})
+    bad_row = _reading(battery_mv=3500.0, hours_old=1)
+    await _poll(coord, {1001: bad_row})
+    assert coord.battery_outlook(1001) == "ok"
+    assert _battery_issues(hass) == []
+    # The same row seen again by the next poll is still one reading.
+    await _poll(coord, {1001: bad_row})
+    assert coord.battery_outlook(1001) == "ok"
+
+
+async def test_malformed_battery_history_keeps_the_poll(hass):
+    coord = _coordinator(hass, fetch_error=ValueError("could not convert 'x'"))
+    await _poll(coord)
+    assert coord.reading(1001) is not None
+    assert coord.battery_outlook(1001) is None
+
+
+async def test_a_newly_polled_probe_gets_its_history_at_the_next_poll(hass):
+    front = {"serial": "AAA111", "device_id": 1001, "name": "Front"}
+    back = {"serial": "BBB222", "device_id": 1002, "name": "Back"}
+    coord = _coordinator(hass, _entry(front))
+    await _poll(coord)
+    coord.config_entry.options = {const.CONF_DEVICES: [front, back]}
+    await _poll(coord, {1001: _reading(), 1002: _reading(1002)})
+    assert coord.client.fetch_battery_history.await_count == 2
+    coord.client.fetch_battery_history.assert_awaited_with([1001, 1002], HISTORY_DAYS)
 
 
 async def test_replace_now_raises_a_repair_until_it_clears(hass, freezer):

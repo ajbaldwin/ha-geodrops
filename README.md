@@ -257,7 +257,7 @@ from the last 14 days of readings (fetched twice a day):
 
 A drained pack's voltage climbs back for a few days when it rests, so Replace
 now stays until the voltage is back above where it was when the fall began.
-Fresh batteries clear it within a day or two. Battery Status is `unknown`
+Fresh batteries clear it within about two days. Battery Status is `unknown`
 until a probe has a week of readings.
 
 The thresholds come from GeoDrops' fleet: 166 probes over two months.
@@ -411,7 +411,7 @@ and stays across restarts until then.
 
 **A "Replace the batteries" repair.** That probe's battery voltage is
 falling fast or is below 4.4 V, so it will likely stop reporting within days.
-Replace its batteries; the repair clears itself a day or two later. See
+Replace its batteries; the repair clears itself within about two days. See
 [Battery warning](#battery-warning).
 
 **A "GeoDrops data is delayed" repair.** Every probe stopped at once, which

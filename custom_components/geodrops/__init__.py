@@ -56,6 +56,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: GeoDropsConfigEntry) -
     if entry.minor_version < 2:
         # Battery Status was disabled by default; now it is the battery warning,
         # so turn it on once for existing installs. One the user disabled stays so.
+        # Home Assistant reloads the entry about 30 s later to add the entity.
         registry = er.async_get(hass)
         for entity in er.async_entries_for_config_entry(registry, entry.entry_id):
             if (
