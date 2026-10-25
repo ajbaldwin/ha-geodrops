@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.9.0 — Offline alerts, battery warning and seasonal removal
+Everything since 0.8.0. If you ran the 0.9.0 beta, nothing has changed since beta.5.
+
+**New**
+- **A probe that stops reporting shows in Repairs** once its latest reading is more than 24 hours old (set under Advanced Options → "Offline alert after"), and clears on its own when it reports again.
+- **When every probe stops at once, one "GeoDrops data is delayed" repair** appears instead, since the cause is usually on GeoDrops' side.
+- **Battery Status now warns before a probe's batteries run out**, judging from how fast the probe's own voltage is falling rather than GeoDrops' flag, which only fired once the batteries had already failed.
+- **A probe whose batteries are about to fail shows in Repairs**, and the repair clears on its own within about two days of fresh batteries going in.
+- **Each probe has an Active switch** on its device page: turn it off while a probe is out of the ground, and it raises no repairs and its sensors show as unavailable, except Last Reading.
+
+**Changed**
+- **Battery Status is now enabled by default and shows Low or Normal**; existing installs get it turned on once, unless you turned it off yourself.
+- **Last Reading keeps showing when a probe last reported**, instead of going unavailable once its data is old, so a probe whose batteries died still shows when it went quiet.
+- **Probes whose device you disable in Home Assistant are no longer polled** and their repairs clear straight away.
+
+**Fixed**
+- **Errors in the Home Assistant log no longer show your GCP project or service-account email**, so a log is safe to paste into a GitHub issue.
+- **Last Reading and Last Detected Watering no longer show a time in the future** for readings uploaded partway through GeoDrops' half-hour slot.
+- **A probe no longer briefly shows an older reading** while GeoDrops refreshes its data.
+- **Removing a probe keeps working on future Home Assistant versions**, which drop an API it used.
+
+One new Active switch per probe, on by default. Home Assistant reloads the integration once, about 30 seconds after the update, to turn Battery Status on.
+
 ## 0.9.0-beta.5 — Last Reading stays put
 **Changed**
 - **Last Reading keeps showing when a probe last reported**, instead of going unavailable once its data is old, so a probe whose batteries died still shows when it went quiet, including after a restart.
