@@ -88,7 +88,7 @@ GeoDrops side (dataset sharing changed), not your IAM setup.
 ## Installation
 
 1. In HACS, add this repository as a **custom repository** (category:
-   Integration): `https://github.com/ajbaldwin/ha-geodrops-hacs`.
+   Integration): `https://github.com/ajbaldwin/ha-geodrops`.
 
    This repository publishes releases with `hide_default_branch: true`, so
    HACS will only ever offer you tagged releases, never the tip of `main`.
@@ -442,7 +442,7 @@ update.
 it to download the log. Also download diagnostics from the same menu; they
 include each probe's last reading and the last error, with the key and
 project id removed. Attach both to an
-[issue](https://github.com/ajbaldwin/ha-geodrops-hacs/issues).
+[issue](https://github.com/ajbaldwin/ha-geodrops/issues).
 
 ## Removing the integration
 

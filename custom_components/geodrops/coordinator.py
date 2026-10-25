@@ -34,7 +34,7 @@ from .transform import (
 
 _LOGGER = logging.getLogger(__name__)
 
-TROUBLESHOOTING_URL = "https://github.com/ajbaldwin/ha-geodrops-hacs#troubleshooting"
+TROUBLESHOOTING_URL = "https://github.com/ajbaldwin/ha-geodrops#troubleshooting"
 
 # Per-probe repairs: the issue's translation key, and the nextAction codes
 # that raise it. Each one's issue id is "<key>_<entry id>_<serial>".
