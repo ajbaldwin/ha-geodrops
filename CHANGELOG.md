@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.1 — New repository name
+**Changed**
+- **The repository is now `ajbaldwin/ha-geodrops`**, and the documentation, issue and troubleshooting links in Home Assistant point there; the old address redirects.
+
+No entity changes.
+
 ## 0.9.0 — Offline alerts, battery warning and seasonal removal
 Everything since 0.8.0. If you ran the 0.9.0 beta, nothing has changed since beta.5.
 
