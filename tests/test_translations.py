@@ -3,9 +3,13 @@ from pathlib import Path
 import re
 
 from custom_components.geodrops.binary_sensor import BINARY_SENSOR_DESCRIPTIONS
-from custom_components.geodrops.sensor import SENSOR_DESCRIPTIONS, WATERING_DESCRIPTIONS
+from custom_components.geodrops.sensor import (
+    LAST_READING_DESCRIPTION,
+    SENSOR_DESCRIPTIONS,
+    WATERING_DESCRIPTIONS,
+)
 
-ALL_SENSORS = (*SENSOR_DESCRIPTIONS, *WATERING_DESCRIPTIONS)
+ALL_SENSORS = (*SENSOR_DESCRIPTIONS, LAST_READING_DESCRIPTION, *WATERING_DESCRIPTIONS)
 ROOT = Path(__file__).parent.parent / "custom_components" / "geodrops"
 # hassfest's translation_key_validator: translation keys, state keys and
 # icons.json state keys must all look like this

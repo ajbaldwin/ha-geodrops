@@ -162,7 +162,8 @@ async def test_turning_the_switch_back_on_restores_the_probe(hass):
 
 async def test_inactive_probe_shows_only_its_last_reading(hass):
     entry = _entry(hass)
-    await _setup(hass, entry, {1001: _reading()})
+    reading = _reading()
+    await _setup(hass, entry, {1001: reading})
     await _switch(hass, "turn_off")
     for entity_id in (
         "sensor.front_dominant_moisture",
@@ -175,9 +176,8 @@ async def test_inactive_probe_shows_only_its_last_reading(hass):
     ):
         assert _state(hass, entity_id) == STATE_UNAVAILABLE, entity_id
     # Last Reading keeps updating, so a probe back in the ground shows up.
-    assert _state(hass, "sensor.front_last_reading") not in (
-        STATE_UNAVAILABLE,
-        "unknown",
+    assert _state(hass, "sensor.front_last_reading") == reading.read_at.isoformat(
+        timespec="seconds"
     )
 
 

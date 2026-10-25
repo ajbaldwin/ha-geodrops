@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.0-beta.5 — Last Reading stays put
+**Changed**
+- **Last Reading keeps showing when a probe last reported**, instead of going unavailable once its data is old, so a probe whose batteries died still shows when it went quiet, including after a restart.
+
+No new entities.
+
 ## 0.9.0-beta.4 — Battery warning
 **New**
 - **Battery Status now warns before a probe's batteries run out**, judging from how fast the probe's own voltage is falling rather than GeoDrops' flag, which only fired once the batteries had already failed.
