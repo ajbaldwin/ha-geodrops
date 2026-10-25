@@ -211,7 +211,7 @@ switch (see [Taking a probe out of service](#taking-a-probe-out-of-service)):
 | Temperature Depth 2 | Soil temperature (°C) at depth sensor 2 |
 | Temperature Depth 3 | Soil temperature (°C) at depth sensor 3 |
 | Avg. 7-Day Sun | 7-day trailing average sun exposure (hours) |
-| Last Reading | When the probe took its latest reading (timestamp). GeoDrops stamps each reading with the end of its half-hour slot, so this can be up to 30 minutes late; it never shows a time in the future. |
+| Last Reading | When the probe took its latest reading (timestamp). GeoDrops stamps each reading with the end of its half-hour slot, so this can be up to 30 minutes late; it never shows a time in the future. It keeps showing that time, across restarts, however long the probe has been silent or inactive. |
 | Last Detected Watering | When GeoDrops last detected a watering in the probe's readings (timestamp). Like Last Reading, it never shows a time in the future. |
 | Watering Confidence | GeoDrops' irrigation confidence for that watering (%) |
 
@@ -226,8 +226,10 @@ while a probe is still in its factory training period and hasn't produced a
 calibrated moisture reading yet. Any other value GeoDrops doesn't report
 (for example a missing temperature) shows as `unknown`, never as 0. A probe
 whose latest reading is older than the configured "mark unavailable after"
-threshold (counted from when the probe took it) goes unavailable entirely. Once a probe's data is older than "warn after", a
-warning is written to the Home Assistant log (once, until it reports again).
+threshold (counted from when the probe took it) goes unavailable, except Last
+Reading, which keeps showing when it last reported. Once a probe's data is
+older than "warn after", a warning is written to the Home Assistant log (once,
+until it reports again).
 
 Battery, Battery Status, Battery Voltage, Signal Strength, Cloud Upload Delay, Last
 Reading, Reading Quality, Reading Quality Depth 1–3, Probe Health, Next Action Codes, Watering Confidence and the Max
@@ -423,9 +425,9 @@ Active switches instead; see
 **GeoDrops asks to re-authenticate.** Google stopped accepting the key. See
 [Rotating the key or changing project](#rotating-the-key-or-changing-project).
 
-**A probe's sensors are unavailable.** Check its Active switch first. Otherwise,
-its latest reading is older than
-"Mark unavailable after", or no reading has come back from a poll for
+**A probe's sensors are unavailable.** Check its Active switch first; its Last
+Reading shows when it last reported. If the switch is on, its latest reading is
+older than "Mark unavailable after", or no reading has come back from a poll for
 "Expire after". Check that the probe is reporting in the GeoDrops app. To
 see whether Wi-Fi is the cause, enable its Signal Strength sensor and check
 its history: a weak signal (around -80 dBm or lower) before the probe went

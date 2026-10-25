@@ -46,8 +46,9 @@ def _coord(reading, skip_hours=12, seen=None):
     return c
 
 
-def test_21_sensors_per_device():
-    assert len(SENSOR_DESCRIPTIONS) == 21
+def test_20_reading_sensors_per_device():
+    # Last Reading and the two watering sensors are separate.
+    assert len(SENSOR_DESCRIPTIONS) == 20
 
 
 def test_moisture_value_and_state():

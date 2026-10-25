@@ -10,6 +10,7 @@ from typing import Any, Self
 from aiogeodrops import DeviceReading
 
 from homeassistant.components.sensor import (
+    RestoreSensor,
     SensorDeviceClass,
     SensorEntity,
     SensorEntityDescription,
@@ -58,9 +59,6 @@ class GeoDropsSensorEntityDescription(SensorEntityDescription):
     value_fn: Callable[[DeviceReading], StateType | datetime]
     # Report None while every depth is still training.
     moisture_gated: bool = False
-    # Stay available while the probe is inactive (normal availability rules
-    # still apply).
-    available_when_inactive: bool = False
 
 
 def _moisture(
@@ -221,18 +219,13 @@ SENSOR_DESCRIPTIONS: tuple[GeoDropsSensorEntityDescription, ...] = (
         # Only applies when a probe is first added.
         entity_registry_enabled_default=False,
     ),
-    GeoDropsSensorEntityDescription(
-        key="last_reading",
-        translation_key="last_reading",
-        available_when_inactive=True,
-        # GeoDrops labels a reading with the end of its half-hour slot, so a
-        # mid-slot upload is up to 30 minutes ahead; never show a future time.
-        value_fn=lambda r: (
-            r.read_at if r.read_at is None else min(r.read_at, dt_util.utcnow())
-        ),
-        device_class=SensorDeviceClass.TIMESTAMP,
-        entity_category=EntityCategory.DIAGNOSTIC,
-    ),
+)
+
+LAST_READING_DESCRIPTION = SensorEntityDescription(
+    key="last_reading",
+    translation_key="last_reading",
+    device_class=SensorDeviceClass.TIMESTAMP,
+    entity_category=EntityCategory.DIAGNOSTIC,
 )
 
 
@@ -300,10 +293,6 @@ class GeoDropsSensor(GeoDropsEntity, SensorEntity):
     entity_description: GeoDropsSensorEntityDescription
 
     @property
-    def _available_when_inactive(self) -> bool:  # type: ignore[override]
-        return self.entity_description.available_when_inactive
-
-    @property
     def native_value(self) -> StateType | datetime:
         """Return the sensor's value from the latest reading."""
         r = self._reading
@@ -312,6 +301,47 @@ class GeoDropsSensor(GeoDropsEntity, SensorEntity):
         if self.entity_description.moisture_gated and r.all_training:
             return None
         return self.entity_description.value_fn(r)
+
+
+class GeoDropsLastReadingSensor(GeoDropsEntity, RestoreSensor):
+    """When the probe last reported, however long ago.
+
+    It is the one sensor that stays available while the probe is inactive,
+    silent or no longer in the poll, and it keeps its time across restarts:
+    by then a long-silent probe is past the lookback and returns no row.
+    """
+
+    _restored: datetime | None = None
+
+    async def async_added_to_hass(self) -> None:
+        """Restore the time shown before the restart."""
+        await super().async_added_to_hass()
+        data = await self.async_get_last_sensor_data()
+        if data is not None and isinstance(data.native_value, datetime):
+            self._restored = data.native_value
+
+    @property
+    def _read_at(self) -> datetime | None:
+        """The newer of the latest reading's time and the restored one."""
+        r = self._reading
+        live = None if r is None else r.read_at
+        times = [t for t in (self._restored, live) if t is not None]
+        return max(times, default=None)
+
+    @property
+    def available(self) -> bool:
+        """Available once the probe has ever reported."""
+        return self._read_at is not None
+
+    @property
+    def native_value(self) -> datetime | None:
+        """Return when the probe last reported."""
+        read_at = self._read_at
+        if read_at is None:
+            return None
+        # GeoDrops labels a reading with the end of its half-hour slot, so a
+        # mid-slot upload is up to 30 minutes ahead; never show a future time.
+        return min(read_at, dt_util.utcnow())
 
 
 class GeoDropsWateringSensor(GeoDropsEntity, RestoreEntity, SensorEntity):
@@ -372,11 +402,14 @@ class GeoDropsWateringSensor(GeoDropsEntity, RestoreEntity, SensorEntity):
 
 def build_sensors(
     coordinator: GeoDropsCoordinator, device: DeviceConfig
-) -> list[GeoDropsSensor | GeoDropsWateringSensor]:
+) -> list[SensorEntity]:
     """Create every sensor for one probe."""
-    sensors: list[GeoDropsSensor | GeoDropsWateringSensor] = [
+    sensors: list[SensorEntity] = [
         GeoDropsSensor(coordinator, device, desc) for desc in SENSOR_DESCRIPTIONS
     ]
+    sensors.append(
+        GeoDropsLastReadingSensor(coordinator, device, LAST_READING_DESCRIPTION)
+    )
     sensors.extend(
         GeoDropsWateringSensor(coordinator, device, desc)
         for desc in WATERING_DESCRIPTIONS
@@ -391,7 +424,7 @@ async def async_setup_entry(
 ) -> None:
     """Add the sensors for every configured probe."""
     coordinator = entry.runtime_data
-    entities: list[GeoDropsSensor | GeoDropsWateringSensor] = []
+    entities: list[SensorEntity] = []
     for device in coordinator.devices:
         entities.extend(build_sensors(coordinator, device))
     async_add_entities(entities)

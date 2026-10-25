@@ -22,9 +22,6 @@ class GeoDropsEntity(CoordinatorEntity[GeoDropsCoordinator]):
     """One value from a probe's latest reading."""
 
     _attr_has_entity_name = True
-    # Keep normal availability while the probe is inactive (Last Reading), so
-    # a probe put back in the ground shows up as reporting.
-    _available_when_inactive = False
 
     def __init__(
         self,
@@ -68,7 +65,7 @@ class GeoDropsEntity(CoordinatorEntity[GeoDropsCoordinator]):
     @property
     def available(self) -> bool:
         """Return False when the probe is inactive, or its data is missing or old."""
-        if not self._active and not self._available_when_inactive:
+        if not self._active:
             return False
         r = self._reading
         if r is None:
