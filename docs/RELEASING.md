@@ -74,8 +74,9 @@ CHANGELOG sections:
    that commit, the tag is new, and `CHANGELOG.md`
    has the version's section. It then tags `vX.Y.Z` and creates the GitHub
    release — a pre-release for `-beta.N`, the latest release for a stable —
-   titled from the CHANGELOG heading. `--dry-run` runs every check and shows
-   the notes without publishing.
+   titled with the CHANGELOG heading's subtitle (HACS already shows the tag
+   in front of it), or with the tag when the heading has none. `--dry-run`
+   runs every check and shows the notes without publishing.
 
    **Or publish from GitHub** (no local `gh` needed): Actions → **Publish
    release** → Run workflow on `main`. It runs the same `tools/release.sh`;
