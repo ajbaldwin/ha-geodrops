@@ -28,6 +28,14 @@ after 0.5.1 is `0.6.0-beta.1` (or `0.5.2-beta.1` for fixes only), and
 promoting it is `0.6.0`. Never publish a beta of a version that is already
 stable; it would sort below it (`tools/release.sh` refuses).
 
+**Never go past `-beta.9`.** HACS doesn't sort releases by version: it offers
+the first non-draft pre-release in GitHub's releases list, and that list isn't
+reliably in version order: it has listed a `-beta.9` ahead of the `-beta.10`
+published after it, so HACS never offered that `-beta.10`. After `-beta.9`,
+promote the stable or move to the next patch's betas (`X.Y.(Z+1)-beta.1`).
+`tools/release.sh` refuses `-beta.10` and up, and after publishing it checks
+that GitHub lists the new release first.
+
 CHANGELOG sections:
 
 - **Each beta** gets its own section, `## 0.6.0-beta.2 — Title`, covering what
@@ -70,13 +78,18 @@ CHANGELOG sections:
    ```
 
    The script refuses unless you are on a clean `main` that matches
-   `origin/main`, the CI and Validate workflows (plus any other run) passed on
-   that commit, the tag is new, and `CHANGELOG.md`
-   has the version's section. It then tags `vX.Y.Z` and creates the GitHub
+   `origin/main`, the CI and Validate workflows (and any other push-triggered
+   workflow) passed on that commit, the tag is new, a beta's number is 9 or
+   less, and `CHANGELOG.md` has the version's section. Only push runs count, so
+   a failed **Publish release** dry run doesn't block. It waits up to 15 minutes
+   (`RELEASE_CI_TIMEOUT`) for CI runs that haven't started or finished yet, so
+   you can publish right after the merge. It then tags `vX.Y.Z` and creates the GitHub
    release — a pre-release for `-beta.N`, the latest release for a stable —
    titled with the CHANGELOG heading's subtitle (HACS already shows the tag
-   in front of it), or with the tag when the heading has none. `--dry-run`
-   runs every check and shows the notes without publishing.
+   in front of it), or with the tag when the heading has none. Last, it checks
+   that GitHub lists the new release first among releases of its kind, since
+   that is the one HACS offers. `--dry-run` runs every check and shows the
+   notes without publishing.
 
    **Or publish from GitHub** (no local `gh` needed): Actions → **Publish
    release** → Run workflow on `main`. It runs the same `tools/release.sh`;
