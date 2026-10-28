@@ -134,6 +134,7 @@ TITLE="$TAG"
 case "$HEADING" in
   *" — "*) TITLE="${HEADING#* — }" ;;
 esac
+[ -n "$TITLE" ] || TITLE="$TAG"
 if [ "$PRERELEASE" = true ]; then
   NOTES="> **Beta.** HACS only offers this to users who turned on this integration's *Pre-release* switch in HACS.
 
