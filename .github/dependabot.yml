@@ -14,3 +14,7 @@ updates:
     groups:
       dev:
         patterns: ["*"]
+    ignore:
+      # Newer releases track HA 2026.10+, which moved config-flow schemas to
+      # probatio. Hold until the minimum HA version is raised to match.
+      - dependency-name: "pytest-homeassistant-custom-component"
