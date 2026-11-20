@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.2 — Marketplace ready
+**Changed**
+- **GeoDrops is listed under Garden & plants** in the catalog the Home Assistant Marketplace and HACS share.
+- **The README covers installing, betas and removal through the Marketplace** (Home Assistant 2026.11 and later) as well as HACS.
+
+No entity changes.
+
 ## 0.9.1 — New repository name
 **Changed**
 - **The repository is now `ajbaldwin/ha-geodrops`**, and the documentation, issue and troubleshooting links in Home Assistant point there; the old address redirects.
