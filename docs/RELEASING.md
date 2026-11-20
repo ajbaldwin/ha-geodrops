@@ -1,21 +1,24 @@
 # Releasing
 
-This repository is distributed via a HACS **custom repository**, with
-`hacs.json`'s `hide_default_branch: true`. That setting means HACS only ever
-offers users **tagged releases** — never the tip of `main` — so a change
-isn't available to installs until it's tagged and released. There is no
-separate "publish to HACS store" step: publishing a GitHub release *is* the
-publish step.
+This repository is in the default catalog (`hacs/default`), which both the
+Home Assistant **Marketplace** (built in from Home Assistant 2026.11) and
+**HACS** (earlier versions) read. Users are only ever offered **tagged
+releases** — never the tip of `main`, which `hacs.json`'s
+`hide_default_branch: true` also hides — so a change isn't available to
+installs until it's tagged and released. There is no separate "publish to the
+store" step: publishing a GitHub release *is* the publish step. The catalog
+picks a release up within about 4 hours, and the Marketplace reads the
+catalog every 6, so allow several hours before users see it.
 
 ## Beta and stable
 
 Releases go out on two channels, both as GitHub releases:
 
-- **Beta — `X.Y.Z-beta.N`**, published as a GitHub *pre-release*. HACS offers
-  it only to users who turned on this integration's **Pre-release** switch —
-  since HACS 2.0 a per-repository switch entity, disabled by default (see the
-  README's *Beta versions*). You run it on your own box first.
-- **Stable — `X.Y.Z`**, the release every HACS user is offered.
+- **Beta — `X.Y.Z-beta.N`**, published as a GitHub *pre-release*. The
+  Marketplace and HACS offer it only to users who turned on this integration's
+  **Pre-release** switch, a per-repository switch entity disabled by default
+  (see the README's *Beta versions*). You run it on your own box first.
+- **Stable — `X.Y.Z`**, the release every user is offered.
 
 **By default, merged changes ship as a beta.** Fixes found while a beta is out
 go into the next beta (`-beta.2`, `-beta.3`, ...), not into a string of stable
@@ -34,7 +37,8 @@ reliably in version order: it has listed a `-beta.9` ahead of the `-beta.10`
 published after it, so HACS never offered that `-beta.10`. After `-beta.9`,
 promote the stable or move to the next patch's betas (`X.Y.(Z+1)-beta.1`).
 `tools/release.sh` refuses `-beta.10` and up, and after publishing it checks
-that GitHub lists the new release first.
+that GitHub lists the new release first. The Marketplace doesn't document how
+it picks a pre-release, so the rule stays for its users too.
 
 CHANGELOG sections:
 
@@ -57,8 +61,8 @@ CHANGELOG sections:
      The tag will be `v` + this version.
    - **Write the release notes** as a new top section in `CHANGELOG.md`,
      headed `## X.Y.Z — Title`. `tools/release.sh` publishes that section
-     verbatim as the GitHub release body, and HACS renders the body as the
-     changelog shown to users before they update. Write a short,
+     verbatim as the GitHub release body, and the Marketplace and HACS show
+     the body as the changelog users read before they update. Write a short,
      human-readable summary of what changed and why it matters to someone
      deciding whether to update — never a raw commit log. Keep it brief:
      one sentence per change, no implementation details (library versions,
@@ -99,9 +103,10 @@ CHANGELOG sections:
    own token), so the job runs `tools/check_release.sh` itself and fails if the
    release is inconsistent.
 
-3. **Verify in HACS.** After the release publishes, HACS should offer the new
-   version as an update (a beta only with the Pre-release switch on) within
-   its normal refresh window.
+3. **Verify the update shows.** After the release publishes, the Marketplace
+   (or HACS, before 2026.11) should offer the new version under **Settings →
+   Updates** (a beta only with the Pre-release switch on) within several
+   hours.
 
 **Release guard.** `.github/workflows/release-guard.yml` re-checks every
 published or edited release — including ones made by hand in the GitHub UI —
@@ -115,7 +120,7 @@ fails. Fix the cause, then publish the draft again.
 - Version numbers are semver (`MAJOR.MINOR.PATCH`). Bump `PATCH` for
   fixes, `MINOR` for backwards-compatible features (e.g. a new sensor),
   `MAJOR` for anything that breaks existing config entries or entity IDs.
-- The manifest `version` and the git tag must agree, or HACS will show a
+- The manifest `version` and the git tag must agree, or users will see a
   confusing version mismatch to users comparing the release notes to what
   they see installed. `tools/release.sh` and the release guard both enforce
   this.

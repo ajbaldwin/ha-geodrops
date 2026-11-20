@@ -85,29 +85,39 @@ project can already read it. If a query ever fails with a permissions error
 *after* your Job User role is confirmed, the cause is almost certainly on the
 GeoDrops side (dataset sharing changed), not your IAM setup.
 
+<!-- ha-marketplace:exclude-start -->
 ## Installation
 
-1. In HACS, add this repository as a **custom repository** (category:
-   Integration): `https://github.com/ajbaldwin/ha-geodrops`.
+[![Open your Home Assistant instance and open this repository in the Marketplace.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=ajbaldwin&repository=ha-geodrops&category=integration)
 
-   This repository publishes releases with `hide_default_branch: true`, so
-   HACS will only ever offer you tagged releases, never the tip of `main`.
-2. Install **GeoDrops** from HACS, then restart Home Assistant
-   when prompted.
-3. Go to **Settings → Devices & Services → Add Integration**, search for
-   **GeoDrops**, and start the config flow.
+GeoDrops is in the default catalog, so you don't need to add it as a custom
+repository. You're only ever offered tagged releases, never the tip of `main`.
 
-### Beta versions
+1. Install it:
+   - **Home Assistant 2026.11 or later:** go to **Settings → Marketplace**,
+     search for **GeoDrops**, and select **Install**. If Home Assistant asks
+     for a restart, a repair under **Settings → System → Repairs** can do it.
+   - **Earlier versions:** in HACS, search for **GeoDrops**, download it, then
+     restart Home Assistant when prompted.
+2. Go to **Settings → Devices & Services → Add Integration**, search for
+   **GeoDrops**, and start the config flow. (On the Marketplace, the setup may
+   open on its own once the install finishes.)
+<!-- ha-marketplace:exclude-end -->
+
+## Beta versions
 
 New versions are released as betas (`X.Y.Z-beta.N`) before they become a
-stable release. HACS only offers betas if you opt in:
+stable release. You only get betas if you opt in, with a **Pre-release**
+switch that is disabled by default:
 
-1. Go to **Settings → Devices & services → Entities**, search for
-   **Pre-release**, and open the one for *GeoDrops* (a switch HACS creates for
-   each repository, disabled by default).
+1. Find the switch:
+   - **Marketplace (2026.11 or later):** go to **Settings → Devices &
+     services → Marketplace** and open the *GeoDrops* device.
+   - **HACS (earlier versions):** go to **Settings → Devices & services →
+     Entities**, search for **Pre-release**, and open the one for *GeoDrops*.
 2. Enable the entity, wait about 30 seconds, then turn the switch **on**.
 
-HACS then offers each beta as an update. Turn the switch off to go back to
+Each beta is then offered as an update. Turn the switch off to go back to
 stable releases only; you'll get the next stable when it's newer than the beta
 you're on.
 
@@ -449,8 +459,12 @@ project id removed. Attach both to an
 1. Go to **Settings → Devices & services → GeoDrops**, open the ⋮ menu and
    choose **Delete**. This removes every probe with its device and sensors,
    and the stored service-account key.
-2. To uninstall the code as well, open **GeoDrops** in HACS, choose ⋮ →
-   **Remove**, then restart Home Assistant.
+2. To uninstall the code as well:
+   - **Marketplace (2026.11 or later):** open **GeoDrops** under **Settings →
+     Marketplace**, choose ⋮ → **Uninstall**, then let the repair restart Home
+     Assistant. Its **Delete and uninstall** option does steps 1 and 2 at once.
+   - **HACS (earlier versions):** open **GeoDrops** in HACS, choose ⋮ →
+     **Remove**, then restart Home Assistant.
 3. Optionally, delete the key in the
    [GCP Console](https://console.cloud.google.com/) (IAM & Admin → Service
    Accounts → your account → Keys), or delete the whole service account.

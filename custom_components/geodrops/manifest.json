@@ -1,6 +1,7 @@
 {
   "domain": "geodrops",
   "name": "GeoDrops",
+  "categories": ["garden_plants"],
   "codeowners": ["@ajbaldwin"],
   "config_flow": true,
   "documentation": "https://github.com/ajbaldwin/ha-geodrops",
