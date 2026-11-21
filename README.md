@@ -1,6 +1,6 @@
 # GeoDrops for Home Assistant
 
-A native Home Assistant integration for [GeoDrops](https://geodrops.io/) soil
+A native Home Assistant integration for [GeoDrops](https://geodrops.com/) soil
 moisture probes. It reads your sensor data straight out of BigQuery and
 exposes each probe as a Home Assistant device with 27 sensors — no MQTT
 bridge, no external service to run, no YAML to hand-edit. Everything is
