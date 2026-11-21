@@ -21,6 +21,7 @@ over BigQuery's REST API, and turns the latest reading per probe into sensor
 entities. There's no MQTT broker, no intermediate sync process,
 and no polling service to keep alive outside of Home Assistant itself.
 
+<!-- ha-marketplace:exclude-start -->
 ### Supported devices
 
 Any GeoDrops soil probe that reports to GeoDrops' cloud, i.e. whose readings
@@ -36,6 +37,7 @@ soil sensor is supported.
   soil temperature drops towards frost.
 - **Probe upkeep.** Know when a probe's battery runs low or it stops
   reporting, before its readings go stale.
+<!-- ha-marketplace:exclude-end -->
 
 ## Prerequisites
 
