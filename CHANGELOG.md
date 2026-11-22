@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.3 — Marketplace page fixes
+**Changed**
+- **The GeoDrops link in the README now opens geodrops.com.**
+- **The Marketplace page no longer shows the README's Supported devices and Use cases sections**, which stay on GitHub.
+
+No entity changes.
+
 ## 0.9.2 — Marketplace ready
 **Changed**
 - **GeoDrops is listed under Garden & plants** in the catalog the Home Assistant Marketplace and HACS share.

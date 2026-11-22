@@ -9,5 +9,5 @@
   "issue_tracker": "https://github.com/ajbaldwin/ha-geodrops/issues",
   "loggers": ["aiogeodrops"],
   "requirements": ["aiogeodrops==0.4.1"],
-  "version": "0.9.2"
+  "version": "0.9.3"
 }
